@@ -1,0 +1,86 @@
+#ifndef TRADE_ACK_HANDLER_HEADER
+#define TRADE_ACK_HANDLER_HEADER
+
+#include "../../../include/Network/MainSession.h"
+#include "../../../include/Network/MainSessionManager.h"
+#include "Enums/GameEnums.h"
+#include "../../../include/MainEnums.h"
+#include "../../../include/Structures/TradeSystem/TradeAck.h"
+#include "Network/Packet.h"
+#include <vector>
+#include <cstdint>
+
+namespace Main
+{
+	namespace Handlers
+	{
+		inline void handleTradeAck(const Common::Network::Packet& request, std::shared_ptr<Main::Network::Session> session, 
+			Main::Network::SessionsManager& sessionsManager,
+			const Main::Structures::EventMissionInfo& tradeInfo)
+		{
+			if (session->hasBeenMatchBanned()) return;
+
+			Common::Network::Packet response;
+			response.setTcpHeader(request.getSession(), Common::Enums::USER_LARGE_ENCRYPTION);
+			response.setOrder(request.getOrder());
+
+			const std::uint32_t now = static_cast<std::uint32_t>(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+			if (now >= tradeInfo.startDate && now <= tradeInfo.endDate)
+			{
+				const std::uint32_t targetAccountId = Main::Details::parseData<std::uint32_t>(request, sizeof(std::uint32_t));
+				const auto& selfAccountInfo = session->getAccountInfo();
+				if (targetAccountId == selfAccountInfo.accountID)
+				{ // prevent trading with self
+					session->sendMessage("You cannot trade with yourself!");
+					return;
+				}
+				
+				if (session->getPlayer().getPlayerState() != Common::Enums::STATE_LOBBY && !session->getPlayer().isInLobby())
+				{
+					session->sendMessage("You must be inside the lobby to trade!", Main::Enums::TIP);
+					return;
+				}
+
+				Main::Structures::TradeAck tradeAck{ selfAccountInfo.uniqueId, selfAccountInfo.accountID };
+				response.setData(reinterpret_cast<std::uint8_t*>(&tradeAck), sizeof(tradeAck));
+
+				if (auto targetSession = sessionsManager.getSessionByAccountId(targetAccountId))
+				{
+					auto targetPlayerState = targetSession->getPlayer().getPlayerState();
+					const auto& targetAccountInfo = targetSession->getAccountInfo();
+
+					if (targetSession->hasBeenMatchBanned())
+					{
+						response.setOrder(192);
+						response.setExtra(Enums::TradeSystemExtra::CANNOT_TRADE_NOW_OR_PLAYER_OFFLINE);
+					}
+					else if (targetAccountInfo.playerLevel < 16 || selfAccountInfo.playerLevel < 16)
+					{
+						response.setOrder(192);
+						response.setExtra(Enums::TradeSystemExtra::LEVEL_TOO_LOW);
+					}
+					else if (targetPlayerState == Common::Enums::PlayerState::STATE_LOBBY && targetSession->getPlayer().isInLobby())
+					{
+						// Todo: check whether this branch is entered in case the player is in a room in a non-ready state
+						targetSession->asyncWrite(response);
+						return;
+					}
+					else
+					{
+						response.setOrder(192);
+						response.setExtra(Enums::TradeSystemExtra::CANNOT_TRADE_NOW_OR_PLAYER_OFFLINE);
+					}
+					session->asyncWrite(response);
+				}
+			}
+			else
+			{
+				response.setOrder(192);
+				response.setExtra(15);
+				session->asyncWrite(response);
+			}
+		}
+	}
+}
+
+#endif

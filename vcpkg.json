@@ -1,0 +1,58 @@
+
+{
+  "name": "microvolts-emulator",
+  "version": "1.0.0",
+  "builtin-baseline": "4e08971f3ddc13018ca858a692efe92d3b6b9fce",
+  "dependencies": [
+    "openssl",
+    "jwt-cpp",
+    "boost-json",
+    "boost-beast",
+    "boost-system",
+    "boost-asio",
+    "mariadb-connector-cpp",
+    {
+      "name": "cryptopp",
+      "features": [ "pem-pack" ]
+    },
+    "boost-assert",
+    "boost-build",
+    "boost-config",
+    "boost-container-hash",
+    "boost-container",
+    "boost-core",
+    "boost-describe",
+    "boost-interprocess",
+    "boost-intrusive",
+    "boost-move",
+    "boost-mp11",
+    "boost-predef",
+    "asio",
+    "boost-preprocessor",
+    "boost-static-assert",
+    "boost-throw-exception",
+    "boost-tuple",
+    "boost-type-traits",
+    "boost-uninstall",
+    "boost-unordered",
+    "boost-vcpkg-helpers",
+    "boost-winapi",
+    "range-v3",
+    "sqlite3",
+    "sqlitecpp",
+    "vcpkg-cmake-config",
+    "vcpkg-cmake-get-vars",
+    "vcpkg-cmake",
+    "directxmath"
+  ],
+  "overrides": [
+    {
+      "name": "range-v3-vs2015",
+      "version": "20151130-vcpkg5#1"
+    },
+    {
+      "name": "cryptopp",
+      "version": "8.9.0"
+    }
+  ]
+}
