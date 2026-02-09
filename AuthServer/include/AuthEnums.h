@@ -19,15 +19,6 @@ namespace Auth
 			SUSPENDED = 42,          // Account banned
 			SHUTDOWN = 80            // No message at all, tilts the client (need to close and reopen)
 		};
-
-		enum ChannelStatus : std::uint32_t
-		{
-			LOW_TRAFFIC = 0,			  // [ChannelStatus: 0000000000]
-			MEDIUM_TRAFFIC = 0x55555500,  // [ChannelStatus: 1111111111]
-			HIGH_TRAFFIC = 0xAAAAAA00,    // [ChannelStatus: 2222222222]
-			OFFLINE = 0xFFFFFF00		  // [ChannelStatus: 3333333333]
-			// Cannot have more statuses, since any value & 3 <= 3
-		};
 	}
 }
 
