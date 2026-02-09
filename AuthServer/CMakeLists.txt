@@ -20,6 +20,8 @@ if (WIN32)
     target_link_libraries(AuthServer PUBLIC wsock32 ws2_32)
 endif()
 
+find_package(OpenSSL REQUIRED)
+target_link_libraries(AuthServer PRIVATE OpenSSL::Crypto OpenSSL::SSL)
 
 set_target_properties(AuthServer PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}

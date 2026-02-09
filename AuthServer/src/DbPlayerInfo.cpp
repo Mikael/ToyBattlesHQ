@@ -17,13 +17,20 @@
 
 #include <cstdint>
 #include <random>
+#include <openssl/rand.h>
 
-std::uint32_t generateHash(std::uint32_t /*accountId*/)
+
+std::uint32_t generateAccountKey()
 {
-	static std::random_device rd;
-	static std::mt19937_64 gen(rd());
-	static std::uniform_int_distribution<std::uint32_t> dis(0, 0xFFFFFFFF);
-	return dis(gen);
+	std::uint32_t value;
+
+	if (RAND_bytes(reinterpret_cast<unsigned char*>(&value), sizeof(value)) != 1) {
+		// entropy source not available => no cryptographically secure random bytes generated
+		return 0; // account key 0 is default, main server won't accept it
+	}
+
+	std::cout << "Generated random number: " << value << '\n';
+	return value;
 }
 
 namespace Auth
@@ -160,7 +167,7 @@ namespace Auth
 						playerInfoStructure.draws = static_cast<std::uint32_t>(res->getInt("Draws"));
 						playerInfoStructure.clanIconFrontID = static_cast<std::uint16_t>(res->getInt("ClanFrontIcon"));
 						playerInfoStructure.clanIconBackID = static_cast<std::uint16_t>(res->getInt("ClanBackIcon"));
-						playerInfoStructure.hashKey = generateHash(playerInfoStructure.accountId);
+						playerInfoStructure.hashKey = generateAccountKey();
 					}
 					else
 					{

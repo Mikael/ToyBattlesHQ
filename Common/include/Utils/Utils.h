@@ -54,12 +54,6 @@ namespace Common
 			session.sendMessage("[Debug] " + message);
 		}
 
-		inline std::uint32_t generateHash(std::uint32_t accountId)
-		{
-			std::hash<int> hasher;
-			std::size_t fullHash = hasher(accountId);
-			return static_cast<std::uint32_t>(fullHash % std::numeric_limits<std::uint32_t>::max());
-		}
 
 		template<typename HashType>
 		std::string calculateHashCryptoPP(const std::string& input)
