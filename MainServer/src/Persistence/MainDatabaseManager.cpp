@@ -847,6 +847,32 @@ namespace Main
             }
         }
 
+        bool PersistentDatabase::logGameEvent(const std::string& logType, const std::string& message, const std::string& severity)
+        {
+            try
+            {
+                std::string createTableQuery = R"(CREATE TABLE IF NOT EXISTS GameLogs (ID INT AUTO_INCREMENT PRIMARY KEY, LogType VARCHAR(255) NOT NULL,
+					Message TEXT NOT NULL, Severity VARCHAR(20) NOT NULL, CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP))";
+
+                std::unique_ptr<sql::Statement> stmtCreate(m_con->createStatement());
+                stmtCreate->execute(createTableQuery);
+
+                std::string insertQuery = "INSERT INTO GameLogs (LogType, Message, Severity) VALUES (?, ?, ?)";
+                std::unique_ptr<sql::PreparedStatement> stmtInsert(m_con->prepareStatement(insertQuery));
+
+                stmtInsert->setString(1, logType);
+                stmtInsert->setString(2, message);
+                stmtInsert->setString(3, severity);
+
+                return stmtInsert->executeUpdate() > 0;
+            }
+            catch (const sql::SQLException& e)
+            {
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), ::Utils::LogType::Error, "PersistentDatabase::logGameEvent");
+                return false;
+            }
+        }
+
         std::optional<Main::Structures::AccountInfo> PersistentDatabase::getPlayerInfo(std::uint32_t playerID)
         {
             Main::Structures::AccountInfo playerInfoStructure{};

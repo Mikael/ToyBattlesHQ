@@ -11,69 +11,118 @@
 
 namespace Auth
 {
+	using namespace Common::Utils;
+
 	Auth::Enums::Login AuthService::authorizeGraded(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token,
 		const std::string& plainPw, const std::string& plainIp, const std::string& plainHwid)
 	{
 		if (ainfo.secret.empty())
 		{
+			m_persistentDatabase.logGameEvent("AuthGradedLogin",
+				"Failed login: missing mandatory secret for graded account " + std::to_string(ainfo.ainfoClient.accountId), "MEDIUM");
 			return Auth::Enums::Login::INCORRECT;
 		}
 
 		auto& authSetup = Common::Utils::SetupParser::getInstance().getAuthSetup();
 
 		if (authSetup.enhancedSecurity)
-		{ // Enhanced security mandates VPN tunnel and correct HWID for >= MOD grade
-
+		{
 			asio::ip::network_v4 vpnNet = asio::ip::make_network_v4(authSetup.gradedAccessSubnet);
 			asio::ip::address_v4 clientIp = asio::ip::make_address_v4(plainIp);
 
-			if (plainIp.empty() || !isIpInSubnet(vpnNet, clientIp)) return Auth::Enums::Login::INCORRECT;
-			if (plainHwid.empty()) return Auth::Enums::Login::INCORRECT;
+			if (plainIp.empty())
+			{
+				m_persistentDatabase.logGameEvent("AuthGradedLogin",
+					"Failed login: No PlainIp found for graded account " + std::to_string(ainfo.ainfoClient.accountId), "MEDIUM");
+				return Auth::Enums::Login::INCORRECT;
+			}
+
+			if (!isIpInSubnet(vpnNet, clientIp))
+			{
+				m_persistentDatabase.logGameEvent("AuthGradedLogin",
+					"Failed login: IP " + plainIp + " not in allowed subnet for graded account " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
+				return Auth::Enums::Login::INCORRECT;
+			}
+
+			if (plainHwid.empty())
+			{
+				m_persistentDatabase.logGameEvent("AuthGradedLogin",
+					"Failed login: missing HWID for graded account " + std::to_string(ainfo.ainfoClient.accountId), "MEDIUM");
+				return Auth::Enums::Login::INCORRECT;
+			}
 
 			std::string dbGradedHash, dbGradedSalt;
 			if (!m_persistentDatabase.getGradedHwid(ainfo.ainfoClient.accountId, dbGradedHash, dbGradedSalt))
 			{
+				m_persistentDatabase.logGameEvent("AuthGradedLogin",
+					"Failed login: unable to retrieve graded HWID from DB for graded account " + std::to_string(ainfo.ainfoClient.accountId), "MEDIUM");
 				return Auth::Enums::Login::INCORRECT;
 			}
 
 			if (dbGradedHash.empty() || dbGradedSalt.empty())
-			{ // on first graded login, register "permanent" HWID
+			{
+				// Register first-time HWID
 				dbGradedSalt = generateRandomSalt();
 				dbGradedHash = hashHwid(plainHwid, dbGradedSalt);
 				if (!m_persistentDatabase.setGradedHwid(ainfo.ainfoClient.accountId, dbGradedHash, dbGradedSalt))
 				{
+					m_persistentDatabase.logGameEvent("AuthGradedLogin",
+						"Failed login: could not set first-time graded HWID for account " + std::to_string(ainfo.ainfoClient.accountId), "LOW");
 					return Auth::Enums::Login::INCORRECT;
 				}
+				m_persistentDatabase.logGameEvent("AuthGradedLogin",
+					"Registered first-time graded HWID for account " + std::to_string(ainfo.ainfoClient.accountId), "LOW");
 			}
 			else
 			{
-				if (hashHwid(plainHwid, dbGradedSalt) != dbGradedHash) return Auth::Enums::Login::INCORRECT;
+				if (hashHwid(plainHwid, dbGradedSalt) != dbGradedHash)
+				{
+					m_persistentDatabase.logGameEvent("AuthGradedLogin",
+						"Failed login: HWID mismatch for graded account " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
+					return Auth::Enums::Login::INCORRECT;
+				}
 			}
 
-			// Update "current" HWID
+			// Update current HWID
 			std::string currentSalt = generateRandomSalt();
 			std::string currentHwidHash = hashHwid(plainHwid, currentSalt);
 			if (!m_persistentDatabase.updateCurrentHwid(ainfo.ainfoClient.accountId, currentHwidHash, currentSalt))
 			{
+				m_persistentDatabase.logGameEvent("AuthGradedLogin",
+					"Failed login: could not update current HWID for graded account " + std::to_string(ainfo.ainfoClient.accountId), "LOW");
 				return Auth::Enums::Login::INCORRECT;
 			}
 		}
 
 		const bool passwordOk = BCrypt::validatePassword(plainPw, ainfo.hashedPassword);
-
-		bool tokenOk = verifyToken(ainfo.secret, token);
+		const bool tokenOk = verifyToken(ainfo.secret, token);
 
 		auto& counters = m_badLoginAttempts[ainfo.ainfoClient.accountId];
-		if (!passwordOk) ++counters.totalWrongPasswords;
-		if (!tokenOk)    ++counters.totalWrong2fas;
+		if (!passwordOk)
+		{
+			++counters.totalWrongPasswords;
+			m_persistentDatabase.logGameEvent("AuthGradedLogin",
+				"Failed login: incorrect password for account " + std::to_string(ainfo.ainfoClient.accountId), "MEDIUM");
+		}
+		if (!tokenOk)
+		{
+			++counters.totalWrong2fas;
+			m_persistentDatabase.logGameEvent("AuthGradedLogin",
+				"Failed login: invalid 2FA token for account " + std::to_string(ainfo.ainfoClient.accountId), "MEDIUM");
+		}
 
 		constexpr std::uint32_t MAX_FAILED_ATTEMPTS = 5;
 		if (counters.totalWrongPasswords >= MAX_FAILED_ATTEMPTS || counters.totalWrong2fas >= MAX_FAILED_ATTEMPTS)
 		{
-			if (!tryLockAccount(ainfo.ainfoClient.accountId))
+			if (!tryLockAccount(ainfo.ainfoClient.accountId, true))
 			{
+				m_persistentDatabase.logGameEvent("AuthGradedLogin",
+					"Account lock attempt failed for account " + std::to_string(ainfo.ainfoClient.accountId), "CRITICAL");
 				return Auth::Enums::Login::INCORRECT;
 			}
+
+			m_persistentDatabase.logGameEvent("AuthGradedLogin",
+				"Account locked due to repeated failed login attempts: " + std::to_string(ainfo.ainfoClient.accountId), "CRITICAL");
 
 			m_badLoginAttempts.erase(ainfo.ainfoClient.accountId);
 			return Auth::Enums::Login::INCORRECT;
@@ -89,13 +138,16 @@ namespace Auth
 		const std::string currentTime = std::format("{:%Y-%m-%d %X}", std::chrono::utc_clock::now());
 		if (ainfo.suspendedUntil > currentTime)
 		{
+			m_persistentDatabase.logGameEvent("AuthGradedLogin",
+				"Login attempt on suspended account " + std::to_string(ainfo.ainfoClient.accountId), "MEDIUM");
 			return Auth::Enums::Login::SUSPENDED;
 		}
 
 		return Auth::Enums::Login::SUCCESS;
 	}
 
-	Auth::Enums::Login AuthService::authorizeUngraded(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token, const std::string& plainPw)
+
+	Auth::Enums::Login AuthService::authorizeUngraded(const Auth::Structures::BasicAccountInfo& ainfo,const std::optional<std::string>& token,const std::string& plainPw)
 	{
 		const bool enhancedSecurity = Common::Utils::SetupParser::getInstance().getAuthSetup().enhancedSecurity;
 		const bool passwordOk = BCrypt::validatePassword(plainPw, ainfo.hashedPassword);
@@ -104,8 +156,10 @@ namespace Auth
 		if (ainfo.secret.empty())
 		{
 			if (enhancedSecurity)
-			{ // enhancedSecurity enabled mandates 2FA for everyone
-				return Auth::Enums::Login::INCORRECT; 
+			{
+				m_persistentDatabase.logGameEvent("AuthUngradedLogin",
+					"Failed login: missing mandatory secret for ungraded account " + std::to_string(ainfo.ainfoClient.accountId),"MEDIUM");
+				return Auth::Enums::Login::INCORRECT;
 			}
 		}
 		else
@@ -114,19 +168,35 @@ namespace Auth
 		}
 
 		auto& counters = m_badLoginAttempts[ainfo.ainfoClient.accountId];
-		if (!passwordOk) ++counters.totalWrongPasswords;
-		if (!tokenOk)    ++counters.totalWrong2fas;
+		if (!passwordOk)
+		{
+			++counters.totalWrongPasswords;
+			m_persistentDatabase.logGameEvent("AuthUngradedLogin",
+				"Failed login: incorrect password for ungraded account " + std::to_string(ainfo.ainfoClient.accountId),"LOW");
+		}
+		if (!tokenOk)
+		{
+			++counters.totalWrong2fas;
+			m_persistentDatabase.logGameEvent("AuthUngradedLogin",
+				"Failed login: invalid 2FA token for ungraded account " + std::to_string(ainfo.ainfoClient.accountId),"LOW");
+		}
 
 		constexpr std::uint32_t MAX_2FA_ATTEMPTS = 5;
-		if (counters.totalWrong2fas >= MAX_2FA_ATTEMPTS)
+		
+		if (counters.totalWrong2fas >= MAX_2FA_ATTEMPTS && enhancedSecurity)
 		{
-			if (!tryLockAccount(ainfo.ainfoClient.accountId))
+			if (!tryLockAccount(ainfo.ainfoClient.accountId, false))
 			{
+				m_persistentDatabase.logGameEvent("AuthUngradedLogin",
+					"Account lock attempt failed for ungraded account " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
 				return Auth::Enums::Login::INCORRECT;
 			}
 
+			m_persistentDatabase.logGameEvent("AuthUngradedLogin",
+				"Account locked due to repeated failed 2FA attempts: " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
+
 			m_badLoginAttempts.erase(ainfo.ainfoClient.accountId);
-			return Auth::Enums::Login::INCORRECT; // On purpose: don't let an attacker know that we banned the account, otherwise they know they used the correct 2FA + password
+			return Auth::Enums::Login::INCORRECT;
 		}
 
 		if (!passwordOk || !tokenOk)
@@ -137,14 +207,16 @@ namespace Auth
 		m_badLoginAttempts.erase(ainfo.ainfoClient.accountId);
 
 		const std::string currentTime = std::format("{:%Y-%m-%d %X}", std::chrono::utc_clock::now());
-
 		if (ainfo.suspendedUntil > currentTime)
 		{
+			m_persistentDatabase.logGameEvent("AuthUngradedLogin",
+				"Login attempt on suspended ungraded account " + std::to_string(ainfo.ainfoClient.accountId), "LOW");
 			return Auth::Enums::Login::SUSPENDED;
 		}
 
 		return Auth::Enums::Login::SUCCESS;
 	}
+
 
 	std::string AuthService::hashHwid(const std::string& hwid, const std::string& salt) const
 	{
@@ -197,13 +269,13 @@ namespace Auth
 		return false;
 	}
 
-	bool AuthService::tryLockAccount(std::uint32_t accountId) 
+	bool AuthService::tryLockAccount(std::uint32_t accountId, bool isGraded) 
 	{
 		constexpr int MAX_RETRIES = 3;
 		bool locked = false;
 		for (int i = 0; i < MAX_RETRIES; ++i)
 		{
-			locked = m_persistentDatabase.removeGradeAndSuspend(accountId);
+			locked = m_persistentDatabase.removeGradeAndSuspend(accountId, isGraded);
 			if (locked) break;
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 		}

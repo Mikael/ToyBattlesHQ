@@ -28,7 +28,7 @@ namespace Auth
 		Auth::Enums::Login authorizeUngraded(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token, const std::string& clientPw);
 
 		bool verifyToken(const std::string& secret, const std::optional<std::string>& token);
-		bool tryLockAccount(std::uint32_t accountId);
+		bool tryLockAccount(std::uint32_t accountId, bool isGraded);
 		std::uint32_t generateAccountKey() const;
 		bool isIpInSubnet(const asio::ip::network_v4& network, const asio::ip::address_v4& ip) const;
 		std::string generateRandomSalt(std::size_t length = 16) const;

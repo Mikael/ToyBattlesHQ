@@ -16,6 +16,13 @@ namespace Main
 {
     namespace Handlers
     {
+        
+        inline bool securityLog(Main::Persistence::MainScheduler& scheduler, std::uint32_t accountGrade, const std::string& message, const std::string& severity)
+        {
+            scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::logGameEvent,
+                accountGrade >= 3 ? "MainAuthGraded" : "MainAuthUngraded", message, severity);
+        }
+
         inline bool isWithinLastMinute(const std::string& timestampUtc)
         {
             std::istringstream iss(timestampUtc);
@@ -28,15 +35,10 @@ namespace Main
             return diff <= std::chrono::minutes(1);
         }
 
-        inline std::optional<Main::Structures::AccountInfo> handleAuthorization(
-            const Common::Network::Packet& request,
-            std::shared_ptr<Main::Network::Session> session,
-            std::size_t totalOnlinePlayers,
-            bool isServerOffline,
-            Main::Persistence::MainScheduler& scheduler,
-            bool isPublic,
-            Main::Classes::ReportManager& reportManager)
+        inline std::optional<Main::Structures::AccountInfo> handleAuthorization(const Common::Network::Packet& request, std::shared_ptr<Main::Network::Session> session,
+            std::size_t totalOnlinePlayers, bool isServerOffline, Main::Persistence::MainScheduler& scheduler, bool isPublic, Main::Classes::ReportManager& reportManager)
         {
+
             Common::Network::Packet response;
             response.setTcpHeader(request.getSession(), Common::Enums::NO_ENCRYPTION);
             response.setOrder(request.getOrder());
@@ -59,7 +61,7 @@ namespace Main
                 // Reset AccountKey to 0 for security measures
                 if (!scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::resetAccountKey, accountInfoOpt->accountID))
                 {
-                    std::cout << "Failed to reset AccountKey\n";
+                    securityLog(scheduler, accountInfoOpt->playerGrade, "Failed to reset AccountKey for account " + std::to_string(accountInfoOpt->accountID), "MEDIUM");
                     response.setExtra(static_cast<std::uint8_t>(Main::Enums::AuthorizationExtra::AUTHORIZATION_FAILED));
                     session->asyncWrite(response);
                     return std::nullopt;
@@ -68,13 +70,12 @@ namespace Main
                 const bool clientVersionMatches = clientInfo.clientVersion.matches(clientVersionRequired.version1, clientVersionRequired.version2, clientVersionRequired.version3);
                 const bool serverUnavailable = totalOnlinePlayers >= Common::Constants::maxServerCapacity || isServerOffline;
 
-                std::cout << "Client AccountHash: " << clientInfo.accountHash << ", accountKeyDb: " << accountInfoOpt->accountKey << '\n';
 
                 std::optional<std::string> lastLogged =
                     scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::getLastLogged, accountInfoOpt->accountID);
                 if (!lastLogged || !isWithinLastMinute(*lastLogged))
                 {
-                    std::cout << "Bad: IsWithinLastMinute FALSE\n";
+                    securityLog(scheduler, accountInfoOpt->playerGrade, "MainAuth fail due to LastLogged being too old " + std::to_string(accountInfoOpt->accountID), "MEDIUM");
                     response.setExtra(static_cast<std::uint8_t>(Main::Enums::AuthorizationExtra::AUTHORIZATION_FAILED));
                     session->asyncWrite(response);
                     return std::nullopt;
@@ -88,6 +89,8 @@ namespace Main
                 }
                 else if (accountInfoOpt->accountID != clientInfo.accountID || clientInfo.accountHash != accountInfoOpt->accountKey)
                 {
+                    securityLog(scheduler, accountInfoOpt->playerGrade, 
+                        "AccountID or AccountHash doesn't match to the one in DB " + std::to_string(accountInfoOpt->accountID), "SEVERE");
                     response.setExtra(static_cast<std::uint8_t>(Main::Enums::AuthorizationExtra::AUTHORIZATION_FAILED));
                     session->asyncWrite(response);
                     return std::nullopt;

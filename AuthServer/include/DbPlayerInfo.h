@@ -29,10 +29,11 @@ namespace Auth
 			PersistentDatabase();
 			void addHash(std::uint32_t accountID, std::uint32_t key);
 			bool updateLastLoggedNow(std::uint32_t aid, const std::string& ip);
+			bool logGameEvent(const std::string& logType, const std::string& message, const std::string& severity);
 
 			std::expected<Auth::Structures::BasicAccountInfo, Auth::Enums::Login> getCompletePlayerInfo(const std::string& username);
 
-			bool removeGradeAndSuspend(std::uint32_t accountId);
+			bool removeGradeAndSuspend(std::uint32_t accountId, bool isGraded);
 			bool getGradedHwid(std::uint32_t accountId, std::string& outHash, std::string& outSalt) const;
 			bool setGradedHwid(std::uint32_t accountId, const std::string& hash, const std::string& salt);
 			bool updateCurrentHwid(std::uint32_t accountId, const std::string& hash, const std::string& salt);

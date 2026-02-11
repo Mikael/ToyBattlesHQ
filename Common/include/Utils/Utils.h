@@ -60,13 +60,6 @@ namespace Common
 			}
 		}
 
-		inline void sendDebugMessage(const std::string& message, Common::Network::Session& session)
-		{
-			session.sendMessage("[Debug] " + message);
-		}
-
-
-
 		template<typename HashType>
 		std::string calculateHashCryptoPP(const std::string& input)
 		{
@@ -233,8 +226,6 @@ namespace Common
 
 			return res == CURLE_OK;
 		}
-
-
 	}
 }
 

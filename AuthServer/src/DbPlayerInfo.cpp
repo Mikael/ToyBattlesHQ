@@ -80,7 +80,33 @@ namespace Auth
 				return false;
 			}
 		}
-		
+
+		bool PersistentDatabase::logGameEvent(const std::string& logType, const std::string& message, const std::string& severity)
+		{
+			try
+			{
+				std::string createTableQuery = R"(CREATE TABLE IF NOT EXISTS GameLogs (ID INT AUTO_INCREMENT PRIMARY KEY, LogType VARCHAR(255) NOT NULL,
+					Message TEXT NOT NULL, Severity VARCHAR(20) NOT NULL, CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP))";
+
+				std::unique_ptr<sql::Statement> stmtCreate(con->createStatement());
+				stmtCreate->execute(createTableQuery);
+
+				std::string insertQuery = "INSERT INTO GameLogs (LogType, Message, Severity) VALUES (?, ?, ?)";
+				std::unique_ptr<sql::PreparedStatement> stmtInsert(con->prepareStatement(insertQuery));
+
+				stmtInsert->setString(1, logType);
+				stmtInsert->setString(2, message);
+				stmtInsert->setString(3, severity);
+
+				return stmtInsert->executeUpdate() > 0;
+			}
+			catch (const sql::SQLException& e)
+			{
+				::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),::Utils::LogType::Error,"PersistentDatabase::logGameEvent");
+				return false;
+			}
+		}
+
 		void PersistentDatabase::addHash(std::uint32_t accountID, std::uint32_t key)
 		{
 			try
@@ -146,7 +172,7 @@ namespace Auth
 			}
 		}
 
-		bool PersistentDatabase::removeGradeAndSuspend(std::uint32_t accountId)
+		bool PersistentDatabase::removeGradeAndSuspend(std::uint32_t accountId, bool isGraded)
 		{
 			using namespace std::chrono;
 			using namespace std::literals;
@@ -170,7 +196,7 @@ namespace Auth
 				const std::string bannedUntil = std::format("{:%Y-%m-%d %H:%M:%S}", zt.get_sys_time());
 
 				updateStmt->setString(1, bannedUntil);
-				updateStmt->setString(2, "GRADED_TOO_MANY_FAILED_LOGIN_ATTEMPTS");
+				updateStmt->setString(2, isGraded ? "GRADED_TOO_MANY_FAILED_LOGIN_ATTEMPTS" : "UNGRADED_TOO_MANY_FAILED_LOGIN_ATTEMPTS");
 				updateStmt->setUInt(3, 1);
 				updateStmt->setUInt(4, accountId);
 

@@ -48,6 +48,7 @@ namespace Main
 			std::unordered_map<std::uint32_t, std::uint32_t> getPlayerMissions(std::uint32_t accountID);
 			bool updatePlayerMissionProgress(std::uint32_t accountID, std::uint32_t missionID, std::uint32_t newProgress);
 			void updateLatestSelectedCharacter(std::uint32_t accountID, std::uint16_t characterId);
+			bool logGameEvent(const std::string& logType, const std::string& message, const std::string& severity);
 			bool savePlayerMissions(std::uint32_t accountID, const std::unordered_map<std::uint32_t, std::uint32_t>& activeMissions);
 			std::optional<std::pair<Main::Structures::AccountInfo, std::string>> getPlayerInfoByNickname(const std::string& nickname);
 			std::optional<std::string> getLastLogged(std::uint32_t accountId);
