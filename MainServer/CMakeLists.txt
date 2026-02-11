@@ -6,8 +6,14 @@ file(GLOB_RECURSE MAIN_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_LIST_DIR}/*.cpp
 )
 
+file(GLOB_RECURSE MAIN_HEADERS CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_LIST_DIR}/*.h
+    ${CMAKE_CURRENT_LIST_DIR}/*.hpp
+)
+
 add_executable(MainServer
     ${MAIN_SOURCES}
+    ${MAIN_HEADERS}
 )
 
 target_include_directories(MainServer
@@ -42,7 +48,6 @@ endif()
 set_target_properties(MainServer PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
-
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 

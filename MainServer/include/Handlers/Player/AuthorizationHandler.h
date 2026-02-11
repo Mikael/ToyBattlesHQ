@@ -9,13 +9,6 @@
 #include <source_location>
 #include <string>
 
-#ifdef _WIN32
-    #include <winsock2.h>
-    #include <WS2tcpip.h>
-#else
-    #include <arpa/inet.h>
-#endif
-
 #include "../../Detail/Utilities.h"
 #include <Enums/PlayerEnums.h>
 
@@ -23,17 +16,16 @@ namespace Main
 {
     namespace Handlers
     {
-        inline std::string ipToString(std::uint32_t ip)
+        inline bool isWithinLastMinute(const std::string& timestampUtc)
         {
-            in_addr addr;
-#ifdef _WIN32
-            addr.S_un.S_addr = ip;
-#else
-            addr.s_addr = ip;
-#endif
-            char str[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, &addr, str, INET_ADDRSTRLEN);
-            return std::string(str);
+            std::istringstream iss(timestampUtc);
+            std::chrono::utc_time<std::chrono::seconds> loggedTime;
+            iss >> std::chrono::parse("%Y-%m-%d %H:%M:%S", loggedTime);
+            if (iss.fail()) return false;
+            auto now = std::chrono::floor<std::chrono::seconds>(std::chrono::utc_clock::now());
+            auto diff = now - loggedTime;
+            if (diff < std::chrono::seconds(0)) return false;
+            return diff <= std::chrono::minutes(1);
         }
 
         inline std::optional<Main::Structures::AccountInfo> handleAuthorization(
@@ -45,8 +37,6 @@ namespace Main
             bool isPublic,
             Main::Classes::ReportManager& reportManager)
         {
-            START_BENCHMARK
-
             Common::Network::Packet response;
             response.setTcpHeader(request.getSession(), Common::Enums::NO_ENCRYPTION);
             response.setOrder(request.getOrder());
@@ -63,24 +53,39 @@ namespace Main
             const auto& clientVersionRequired = Common::Utils::SetupParser::getInstance().getClientSetup();
 
             if (auto accountInfoOpt =
-                    scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::getPlayerInfo, clientInfo.accountID); 
+                scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::getPlayerInfo, clientInfo.accountID);
                 accountInfoOpt)
             {
-                const bool clientVersionMatches = clientInfo.clientVersion.matches(
-                    clientVersionRequired.version1,
-                    clientVersionRequired.version2,
-                    clientVersionRequired.version3
-                );
+                // Reset AccountKey to 0 for security measures
+                if (!scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::resetAccountKey, accountInfoOpt->accountID))
+                {
+                    std::cout << "Failed to reset AccountKey\n";
+                    response.setExtra(static_cast<std::uint8_t>(Main::Enums::AuthorizationExtra::AUTHORIZATION_FAILED));
+                    session->asyncWrite(response);
+                    return std::nullopt;
+                }
+
+                const bool clientVersionMatches = clientInfo.clientVersion.matches(clientVersionRequired.version1, clientVersionRequired.version2, clientVersionRequired.version3);
                 const bool serverUnavailable = totalOnlinePlayers >= Common::Constants::maxServerCapacity || isServerOffline;
+
+                std::cout << "Client AccountHash: " << clientInfo.accountHash << ", accountKeyDb: " << accountInfoOpt->accountKey << '\n';
+
+                std::optional<std::string> lastLogged =
+                    scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::getLastLogged, accountInfoOpt->accountID);
+                if (!lastLogged || !isWithinLastMinute(*lastLogged))
+                {
+                    std::cout << "Bad: IsWithinLastMinute FALSE\n";
+                    response.setExtra(static_cast<std::uint8_t>(Main::Enums::AuthorizationExtra::AUTHORIZATION_FAILED));
+                    session->asyncWrite(response);
+                    return std::nullopt;
+                }
 
                 if ((serverUnavailable || !clientVersionMatches || !isPublic) && accountInfoOpt->playerGrade < Common::Enums::PlayerGrade::GRADE_MOD)
                 {
                     response.setExtra(static_cast<std::uint8_t>(Main::Enums::AuthorizationExtra::WRONG_CLIENT_VER_OR_SERVER_FULL_OR_OFFLINE));
                     session->asyncWrite(response);
-                    END_BENCHMARK(handleAuthorization, session)
                     return std::nullopt;
                 }
-
                 else if (accountInfoOpt->accountID != clientInfo.accountID || clientInfo.accountHash != accountInfoOpt->accountKey)
                 {
                     response.setExtra(static_cast<std::uint8_t>(Main::Enums::AuthorizationExtra::AUTHORIZATION_FAILED));
@@ -88,11 +93,8 @@ namespace Main
                     return std::nullopt;
                 }
 
-                auto hasBeenMatchBannedOpt = scheduler.immediatePersist(
-                    std::source_location::current(),
-                    &Main::Persistence::PersistentDatabase::hasBeenMatchBanned,
-                    accountInfoOpt->accountID
-                );
+                auto hasBeenMatchBannedOpt = scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::hasBeenMatchBanned,
+                    accountInfoOpt->accountID);
 
                 if (hasBeenMatchBannedOpt == std::nullopt)
                 {
@@ -120,19 +122,12 @@ namespace Main
                     }
                 }
 
-                
-                    session->sendMessage(
-                        "Client Version: " +
-                        std::to_string(clientInfo.clientVersion.ver2) + "." +
-                        std::to_string(clientInfo.clientVersion.ver3) + "." +
-                        std::to_string(clientInfo.clientVersion.ver4)
-                    );
+                session->sendMessage("Client Version: " + std::to_string(clientInfo.clientVersion.ver2) + "." + std::to_string(clientInfo.clientVersion.ver3) + "." +
+                    std::to_string(clientInfo.clientVersion.ver4));
 
-                END_BENCHMARK(handleAuthorization, session)
                 return *accountInfoOpt;
             }
 
-            END_BENCHMARK(handleAuthorization, session)
             return std::nullopt;
         }
     }

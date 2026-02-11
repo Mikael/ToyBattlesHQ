@@ -50,6 +50,8 @@ namespace Main
 			void updateLatestSelectedCharacter(std::uint32_t accountID, std::uint16_t characterId);
 			bool savePlayerMissions(std::uint32_t accountID, const std::unordered_map<std::uint32_t, std::uint32_t>& activeMissions);
 			std::optional<std::pair<Main::Structures::AccountInfo, std::string>> getPlayerInfoByNickname(const std::string& nickname);
+			std::optional<std::string> getLastLogged(std::uint32_t accountId);
+			bool resetAccountKey(std::uint32_t accountId);
 			std::optional<Main::Structures::AccountInfo> getPlayerInfo(std::uint32_t playerID);
 			Main::Structures::MuteInfo isMuted(std::uint32_t playerID);
 			std::optional<std::string> getRoomCreationDisabledUntil(const std::string& nickname);

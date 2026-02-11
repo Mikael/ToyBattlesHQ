@@ -934,6 +934,52 @@ namespace Main
             return playerInfoStructure;
         }
 
+        std::optional<std::string> PersistentDatabase::getLastLogged(std::uint32_t accountId)
+        {
+            try
+            {
+                std::string queryStr = "SELECT LastLogged FROM Users WHERE AccountID = ?";
+
+                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(queryStr));
+                stmt->setUInt(1, accountId);
+
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
+
+                if (res->next())
+                {
+                    return res->getString("LastLogged").c_str();
+                }
+                else
+                {
+                    return std::nullopt;
+                }
+            }
+            catch (const sql::SQLException& e)
+            {
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::getLastLoggedByAccountId");
+                return std::nullopt;
+            }
+        }
+
+        bool PersistentDatabase::resetAccountKey(std::uint32_t accountId)
+        {
+            try
+            {
+                std::string queryStr = "UPDATE Users SET AccountKey = 0 WHERE AccountID = ?";
+
+                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(queryStr));
+                stmt->setUInt(1, accountId);
+
+                return stmt->executeUpdate() > 0;
+            }
+            catch (const sql::SQLException& e)
+            {
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::resetAccountKey");
+                return false;
+            }
+        }
+
+
         std::optional<std::pair<Main::Structures::AccountInfo, std::string>> PersistentDatabase::getPlayerInfoByNickname(const std::string& nickname)
         {
             Main::Structures::AccountInfo playerInfoStructure{};
