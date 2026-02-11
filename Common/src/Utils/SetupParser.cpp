@@ -114,6 +114,7 @@ namespace Common
             }
 
             ini::IniSection& authServer = m_iniFile["AuthServer"];
+
             if (!authServer.contains("Ip") || authServer["Ip"].as<std::string>().empty())
             {
                 ::Utils::Logger::log("Missing/empty Ip in 'AuthServer' section", ::Utils::LogType::Error, "SetupParser::checkAuthSection");
@@ -125,6 +126,22 @@ namespace Common
                 ::Utils::Logger::log("Missing or invalid Port in 'AuthServer' section", ::Utils::LogType::Error, "SetupParser::checkAuthSection");
                 return false;
             }
+
+            if (!authServer.contains("EnhancedSecurity"))
+            {
+                ::Utils::Logger::log("Missing EnhancedSecurity parameter in 'AuthServer' section", ::Utils::LogType::Error, "SetupParser::checkAuthSection");
+                return false;
+            }
+
+            if (authServer["EnhancedSecurity"].as<bool>())
+            {
+                if (!authServer.contains("GradedAccessSubnet") || authServer["GradedAccessSubnet"].as<std::string>().empty())
+                {
+                    ::Utils::Logger::log("Missing or empty GradedAccessSubnet in 'AuthServer' section while EnhancedSecurity is true", ::Utils::LogType::Error, "SetupParser::checkAuthSection");
+                    return false;
+                }
+            }
+
             return true;
         }
 
@@ -211,6 +228,11 @@ namespace Common
             AuthSetup auth;
             auth.ip = m_iniFile["AuthServer"]["Ip"].as<std::string>();
             auth.port = m_iniFile["AuthServer"]["Port"].as<std::uint32_t>();
+            auth.enhancedSecurity = m_iniFile["AuthServer"]["EnhancedSecurity"].as<bool>();
+
+            if (auth.enhancedSecurity)
+                auth.gradedAccessSubnet = m_iniFile["AuthServer"]["GradedAccessSubnet"].as<std::string>();
+
             return auth;
         }
 

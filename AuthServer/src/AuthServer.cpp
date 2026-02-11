@@ -12,12 +12,11 @@ namespace Auth
 		, m_database()
 	{
 		Common::Network::Session::addCallback<Common::Network::PacketType::ENCRYPTED, Auth::Network::Session>(22, [&](const Common::Network::Packet& request,
-			std::shared_ptr<Auth::Network::Session> session) { Auth::Handlers::handleAuthUserInformation(request, session, m_database); });
+			std::shared_ptr<Auth::Network::Session> session) { Auth::Handlers::handleAuthUserInformation(request, session, m_authService); });
 
 		Common::Network::Session::addCallback<Common::Network::PacketType::ENCRYPTED, Auth::Network::Session>(23, Auth::Handlers::handleServerChannelsInfo);
 
-		Common::Network::Session::addCallback<Common::Network::PacketType::ENCRYPTED, Auth::Network::Session>(25, Auth::Handlers::pong25);
-
+		Common::Network::Session::addCallback<Common::Network::PacketType::ENCRYPTED, Auth::Network::Session>(81, Auth::Handlers::handleHwidRetrieval);
 	}
 
 	void AuthServer::asyncAccept()

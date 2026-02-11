@@ -14,10 +14,9 @@
 
 namespace auth
 {
-    uint32_t generateToken(const std::string& t_secret, const int& t_interval = 30) {
+    uint32_t generateToken(const std::string& t_secret, std::time_t timeNow, const int& t_interval = 30) {
         const CppTotp::Bytes::ByteString key = CppTotp::Bytes::fromBase32(t_secret);
-        uint32_t token = CppTotp::totp(key, time(nullptr), 0, t_interval, 6);
-
+        uint32_t token = CppTotp::totp(key, timeNow, 0, t_interval, 6);
         return token;
     }
 

@@ -10,28 +10,11 @@
 #include <format>
 #include <string>
 #include <utility>
-#include <libcppotp/auth.h>
 #include "Utils/Logger.h"
 #include "Utils/Utils.h"
 #include <Enums/PlayerEnums.h>
-
 #include <cstdint>
-#include <random>
-#include <openssl/rand.h>
 
-
-std::uint32_t generateAccountKey()
-{
-	std::uint32_t value;
-
-	if (RAND_bytes(reinterpret_cast<unsigned char*>(&value), sizeof(value)) != 1) {
-		// entropy source not available => no cryptographically secure random bytes generated
-		return 0; // account key 0 is default, main server won't accept it
-	}
-
-	std::cout << "Generated random number: " << value << '\n';
-	return value;
-}
 
 namespace Auth
 {
@@ -113,176 +96,171 @@ namespace Auth
 			}
 		}
 
-		std::pair<Common::Network::Packet, Auth::Structures::BasicAccountInfo> 
-			PersistentDatabase::getPlayerInfo(const std::string& username, const std::string& password, bool is2fa)
+		std::expected<Auth::Structures::BasicAccountInfo, Auth::Enums::Login> PersistentDatabase::getCompletePlayerInfo(const std::string& username)
 		{
-			Common::Network::Packet playerInfo;
 			Auth::Structures::BasicAccountInfo playerInfoStructure{};
 
-			const std::string queryStr = is2fa
-				? "SELECT Users.*, Clans.Clanname, Clans.ClanFrontIcon, Clans.ClanBackIcon "
-				"FROM Users LEFT JOIN Clans ON Users.ClanID = Clans.ClanId WHERE Username = ?"
-				: "SELECT Users.*, Clans.Clanname, Clans.ClanFrontIcon, Clans.ClanBackIcon "
-				"FROM Users LEFT JOIN Clans ON Users.ClanID = Clans.ClanId WHERE Username = ? AND Password = ?";
+			const std::string queryStr = "SELECT Users.*, Clans.Clanname, Clans.ClanFrontIcon, Clans.ClanBackIcon "
+				"FROM Users LEFT JOIN Clans ON Users.ClanID = Clans.ClanId WHERE Username = ?";
 
 			try
 			{
 				std::unique_ptr<sql::PreparedStatement> stmt(con->prepareStatement(queryStr));
 				stmt->setString(1, username);
-				if (!is2fa) stmt->setString(2, password);
 
 				std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 				if (res->next())
 				{
-					const std::uint32_t playerGrade = static_cast<std::uint32_t>(res->getInt("Grade"));
-					const std::string secret = res->getString("Secret").c_str();
-					if (playerGrade >= Common::Enums::PlayerGrade::GRADE_ES && secret.empty())
-					{ // >= MOD grade must mandatorily have 2FA enabled
-						playerInfo.setExtra(Auth::Enums::Login::INCORRECT);
-						return std::pair{ playerInfo, playerInfoStructure };
-					}
-					
-					const std::string suspendedUntil = res->getString("SuspendedUntil").c_str();
-					auto const time = std::chrono::utc_clock::now();
-					const std::string current_time = std::format("{:%Y-%m-%d %X}", time);
+					playerInfoStructure.grade = static_cast<std::uint32_t>(res->getInt("Grade"));
+					playerInfoStructure.secret = res->getString("Secret").c_str();
+					playerInfoStructure.hashedPassword = res->getString("Password").c_str();
+					playerInfoStructure.suspendedUntil = res->getString("SuspendedUntil").c_str();
+					playerInfoStructure.ainfoClient.accountId = static_cast<std::uint32_t>(res->getInt("AccountID"));
+					std::strncpy(playerInfoStructure.ainfoClient.playerName, res->getString("Nickname").c_str(), sizeof(playerInfoStructure.ainfoClient.playerName) - 1);
+					playerInfoStructure.ainfoClient.playerName[sizeof(playerInfoStructure.ainfoClient.playerName) - 1] = '\0';
+					std::strncpy(playerInfoStructure.ainfoClient.clanName, res->getString("Clanname").c_str(), sizeof(playerInfoStructure.ainfoClient.clanName) - 1);
+					playerInfoStructure.ainfoClient.clanName[sizeof(playerInfoStructure.ainfoClient.clanName) - 1] = '\0';
+					playerInfoStructure.grade = static_cast<std::uint32_t>(res->getInt("Grade"));
+					playerInfoStructure.ainfoClient.level = static_cast<std::uint32_t>(res->getInt("Level")) + 1;
+					playerInfoStructure.ainfoClient.exp = static_cast<std::uint32_t>(res->getInt("Experience"));
+					playerInfoStructure.ainfoClient.kills = static_cast<std::uint32_t>(res->getInt("Kills"));
+					playerInfoStructure.ainfoClient.deaths = static_cast<std::uint32_t>(res->getInt("Deaths"));
+					playerInfoStructure.ainfoClient.assists = static_cast<std::uint32_t>(res->getInt("Assists"));
+					playerInfoStructure.ainfoClient.wins = static_cast<std::uint32_t>(res->getInt("Wins"));
+					playerInfoStructure.ainfoClient.losses = static_cast<std::uint32_t>(res->getInt("Loses"));
+					playerInfoStructure.ainfoClient.draws = static_cast<std::uint32_t>(res->getInt("Draws"));
+					playerInfoStructure.ainfoClient.clanIconFrontID = static_cast<std::uint16_t>(res->getInt("ClanFrontIcon"));
+					playerInfoStructure.ainfoClient.clanIconBackID = static_cast<std::uint16_t>(res->getInt("ClanBackIcon"));
 
-					if (suspendedUntil <= current_time)
-					{
-						playerInfo.setExtra(Auth::Enums::Login::SUCCESS);
-
-						playerInfoStructure.accountId = static_cast<std::uint32_t>(res->getInt("AccountID"));
-						std::strncpy(playerInfoStructure.playerName, res->getString("Nickname").c_str(), sizeof(playerInfoStructure.playerName) - 1);
-						playerInfoStructure.playerName[sizeof(playerInfoStructure.playerName) - 1] = '\0';
-						std::strncpy(playerInfoStructure.clanName, res->getString("Clanname").c_str(), sizeof(playerInfoStructure.clanName) - 1);
-						playerInfoStructure.clanName[sizeof(playerInfoStructure.clanName) - 1] = '\0';
-
-						playerInfo.setOption(static_cast<std::uint32_t>(res->getInt("Grade")));
-						playerInfoStructure.level = static_cast<std::uint32_t>(res->getInt("Level")) + 1;
-						playerInfoStructure.exp = static_cast<std::uint32_t>(res->getInt("Experience"));
-						playerInfoStructure.kills = static_cast<std::uint32_t>(res->getInt("Kills"));
-						playerInfoStructure.deaths = static_cast<std::uint32_t>(res->getInt("Deaths"));
-						playerInfoStructure.assists = static_cast<std::uint32_t>(res->getInt("Assists"));
-						playerInfoStructure.wins = static_cast<std::uint32_t>(res->getInt("Wins"));
-						playerInfoStructure.losses = static_cast<std::uint32_t>(res->getInt("Loses"));
-						playerInfoStructure.draws = static_cast<std::uint32_t>(res->getInt("Draws"));
-						playerInfoStructure.clanIconFrontID = static_cast<std::uint16_t>(res->getInt("ClanFrontIcon"));
-						playerInfoStructure.clanIconBackID = static_cast<std::uint16_t>(res->getInt("ClanBackIcon"));
-						playerInfoStructure.hashKey = generateAccountKey();
-					}
-					else
-					{
-						playerInfo.setExtra(Auth::Enums::Login::SUSPENDED);
-					}
+					return playerInfoStructure;
 				}
 				else
 				{
-					playerInfo.setExtra(Auth::Enums::Login::INCORRECT);
+					return std::unexpected(Auth::Enums::Login::INCORRECT);
 				}
 			}
 			catch (const sql::SQLException& e)
 			{
 				::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), ::Utils::LogType::Error, "PersistentDatabase::getPlayerInfo");
-				playerInfo.setExtra(Auth::Enums::Login::DATA_ERROR);
+				return std::unexpected(Auth::Enums::Login::DATA_ERROR);
 			}
-
-			if (playerInfoStructure.accountId != 0)
-			{
-				addHash(playerInfoStructure.accountId, playerInfoStructure.hashKey);
-			}
-			playerInfo.setData(reinterpret_cast<std::uint8_t*>(&playerInfoStructure), sizeof(playerInfoStructure));
-
-			return std::pair{ playerInfo, playerInfoStructure };
 		}
 
-		std::pair<Common::Network::Packet, Auth::Structures::BasicAccountInfo>
-			PersistentDatabase::twoFactorLogin(const std::string& username, const std::string& password, const std::string& nonHashedPassword, 
-				const std::string& secret, bool isLoginOk)
+		bool PersistentDatabase::removeGradeAndSuspend(std::uint32_t accountId)
 		{
-			Common::Network::Packet playerInfo;
-
-			auto verifyUserCredentials = [this, &username, &password, &playerInfo]() -> std::pair<Common::Network::Packet, Auth::Structures::BasicAccountInfo> 
-			{
-				std::unique_ptr<sql::PreparedStatement> stmt(con->prepareStatement("SELECT Password FROM Users WHERE Username = ? AND Password = ?"));
-				stmt->setString(1, username);
-				stmt->setString(2, password);
-				std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
-
-				if (res->next())
-				{ // correct password
-					std::unique_ptr<sql::PreparedStatement> updateStmt(con->prepareStatement("UPDATE Users SET LoginOK = TRUE WHERE Username = ?"));
-					updateStmt->setString(1, username);
-					updateStmt->executeUpdate();
-
-					// nb. this serves as an indication that the password is correct, and that the token must now be inserted for 2nd phase
-					playerInfo.setExtra(Auth::Enums::Login::USE_TOKEN);
-					return std::pair{ playerInfo, Auth::Structures::BasicAccountInfo{} };
-				}
-				else 
-				{
-					playerInfo.setExtra(Auth::Enums::Login::INCORRECT);
-					return std::pair{ playerInfo, Auth::Structures::BasicAccountInfo{} };
-				}
-			};
+			using namespace std::chrono;
+			using namespace std::literals;
 
 			try
 			{
-				if (!isLoginOk)
-				{ // Phase 1: given password is user password. Check that it's correct and return immediately, so they can login again for phase 2 (token)
-					return verifyUserCredentials();
+				std::string checkGradeQuery = "SELECT Grade FROM Users WHERE AccountID = ?";
+				std::unique_ptr<sql::PreparedStatement> checkStmt(con->prepareStatement(checkGradeQuery));
+				checkStmt->setUInt(1, accountId);
+
+				sql::ResultSet* res(checkStmt->executeQuery());
+				if (!res->next())
+				{
+					return false;
 				}
-				else
-				{ // Phase 2: token verification
-					auto verifiedCredentials = verifyUserCredentials();
-					if (verifiedCredentials.first.getExtra() == Auth::Enums::Login::USE_TOKEN)
-					{ // the user inputted their (correct) password again even though they already did it, notify them to input 2fa token again
-						return verifiedCredentials;
-					}
-					else
-					{ // otherwise, check if they inputted the correct 2fa token and reset LoginOK to re-ask for the original password if the token is wrong
-						std::unique_ptr<sql::PreparedStatement> updateStmt(con->prepareStatement("UPDATE Users SET LoginOK = FALSE WHERE Username = ?"));
-						updateStmt->setString(1, username);
-						updateStmt->executeUpdate();
 
-						auto generatedToken = auth::generateToken(secret);
+				std::string updateQuery = "UPDATE Users SET SuspendedUntil = ?, SuspensionReason = ?, Grade = ? WHERE AccountID = ?";
+				std::unique_ptr<sql::PreparedStatement> updateStmt(con->prepareStatement(updateQuery));
 
-						std::ostringstream tokenStream;
-						tokenStream << std::setw(6) << std::setfill('0') << generatedToken;
-						auto tokenString = tokenStream.str();
+				zoned_time zt{ "UTC", local_seconds{duration_cast<seconds>(system_clock::now().time_since_epoch()) + seconds(9999 * 24 * 60 * 60)} };
+				const std::string bannedUntil = std::format("{:%Y-%m-%d %H:%M:%S}", zt.get_sys_time());
 
-						if (nonHashedPassword != tokenString)
-						{
-							playerInfo.setExtra(Auth::Enums::Login::INCORRECT);
-							return std::pair{ playerInfo, Auth::Structures::BasicAccountInfo{} };
-						}
-						return getPlayerInfo(username, password, true);
-					}
+				updateStmt->setString(1, bannedUntil);
+				updateStmt->setString(2, "GRADED_TOO_MANY_FAILED_LOGIN_ATTEMPTS");
+				updateStmt->setUInt(3, 1);
+				updateStmt->setUInt(4, accountId);
+
+				if (updateStmt->executeUpdate() == 0)
+				{
+					::Utils::Logger::log("Error executing query: " + updateQuery, ::Utils::LogType::Warning, "PersistentDatabase::removeGradeAndSuspend");
+					return false;
 				}
 			}
 			catch (const sql::SQLException& e)
 			{
-				::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), ::Utils::LogType::Error, "PersistentDatabase::twoFactorLogin");
-				playerInfo.setExtra(Auth::Enums::Login::DATA_ERROR);
-				return std::pair{ playerInfo, Auth::Structures::BasicAccountInfo{} };
+				::Utils::Logger::log(std::string("MariaDB exception: ") + e.what(), ::Utils::LogType::Error, "PersistentDatabase::removeGradeAndSuspend");
+				return false;
+			}
+			return true;
+		}
+
+		bool PersistentDatabase::getGradedHwid(std::uint32_t accountId, std::string& outHash, std::string& outSalt) const
+		{
+			try
+			{
+				std::string query = "SELECT HWIDGraded, HWIDGradedSalt FROM Users WHERE AccountID = ?";
+				std::unique_ptr<sql::PreparedStatement> stmt(con->prepareStatement(query));
+				stmt->setUInt(1, accountId);
+
+				std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
+				if (res->next())
+				{
+					outHash = res->getString("HWIDGraded").c_str();
+					outSalt = res->getString("HWIDGradedSalt").c_str();
+					return true;
+				}
+
+				return false;
+			}
+			catch (const sql::SQLException& e)
+			{
+				::Utils::Logger::log("MariaDB exception in getGradedHwid: " + std::string(e.what()), ::Utils::LogType::Error);
+				return false;
 			}
 		}
 
-		std::pair<Common::Network::Packet, Auth::Structures::BasicAccountInfo> 
-			PersistentDatabase::getPlayerInfo(const std::string& username, const std::string& password)
+		bool PersistentDatabase::setGradedHwid(std::uint32_t accountId, const std::string& hash, const std::string& salt)
 		{
-			const std::string hashedPassword = Common::Utils::calculateHashCryptoPP<CryptoPP::SHA256>(password);
-			const std::string secretQuery = "SELECT Secret, LoginOK, Grade FROM Users WHERE Username = ?";
-			std::unique_ptr<sql::PreparedStatement> secretStmt(con->prepareStatement(secretQuery));
-			secretStmt->setString(1, username);
-
-			std::unique_ptr<sql::ResultSet> secretRes(secretStmt->executeQuery());
-			if (secretRes->next())
+			try
 			{
-				if (const std::string secret = secretRes->getString("Secret").c_str(); !secret.empty())
-				{
-					return twoFactorLogin(username, hashedPassword, password, secret, secretRes->getBoolean("LoginOK"));
-				}
+				std::string query =
+					"UPDATE Users SET HWIDGraded = IF(HWIDGraded IS NULL OR HWIDGraded = '', ?, HWIDGraded), "
+					"HWIDGradedSalt = IF(HWIDGradedSalt IS NULL OR HWIDGradedSalt = '', ?, HWIDGradedSalt) "
+					"WHERE AccountID = ?";
+
+				std::unique_ptr<sql::PreparedStatement> stmt(con->prepareStatement(query));
+				stmt->setString(1, hash);
+				stmt->setString(2, salt);
+				stmt->setUInt(3, accountId);
+
+				return stmt->executeUpdate() > 0;
 			}
-			return getPlayerInfo(username, hashedPassword, false);
+			catch (const sql::SQLException& e)
+			{
+				::Utils::Logger::log("MariaDB exception in setGradedHwid: " + std::string(e.what()), ::Utils::LogType::Error);
+				return false;
+			}
+		}
+
+		bool PersistentDatabase::updateCurrentHwid(std::uint32_t accountId, const std::string& hash, const std::string& salt)
+		{
+			try
+			{
+				std::string query = "UPDATE Users SET HWID = ?, HWIDSalt = ? WHERE AccountID = ?";
+				std::unique_ptr<sql::PreparedStatement> stmt(con->prepareStatement(query));
+
+				stmt->setString(1, hash);
+				stmt->setString(2, salt);
+				stmt->setUInt(3, accountId);
+
+				return stmt->executeUpdate() > 0;
+			}
+			catch (const sql::SQLException& e)
+			{
+				::Utils::Logger::log("MariaDB exception in updateCurrentHwid: " + std::string(e.what()), ::Utils::LogType::Error);
+				return false;
+			}
 		}
 	};
 }
+
+
+
+
+
+
+

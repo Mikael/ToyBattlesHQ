@@ -16,6 +16,8 @@ namespace Common
         {
             std::string ip;
             std::uint32_t port;
+            bool enhancedSecurity;
+            std::string gradedAccessSubnet;
         };
 
         struct MainSetup

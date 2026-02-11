@@ -6,6 +6,7 @@
 #include <asio.hpp>
 #include <string>
 #include "DbPlayerInfo.h"
+#include "AuthService.h"
 
 namespace Auth
 {
@@ -19,6 +20,7 @@ namespace Auth
 		tcp::acceptor m_acceptor;
 		std::optional<tcp::socket> m_socket;
 		Auth::Persistence::PersistentDatabase m_database;
+		Auth::AuthService m_authService;
 
 	public:
 		AuthServer(ioContext& io_context, const std::string& ip, std::uint16_t port);

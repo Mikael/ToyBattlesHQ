@@ -53,6 +53,7 @@ namespace Common
 			std::string m_ip;
 
 		public:
+			std::string m_hwid = "";
 			bool m_checkValidSession{true};
 			bool m_isValidSession{};
 			bool m_isFirstRead{ true };
