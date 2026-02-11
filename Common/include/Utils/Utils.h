@@ -1,7 +1,6 @@
 #ifndef GENERAL_UTILS_COMMON_H
 #define GENERAL_UTILS_COMMON_H
 
-#include "cryptopp/sha.h"
 #include <cryptopp/sha.h>
 #include <cryptopp/hex.h>
 #include <cryptopp/filters.h>
@@ -21,6 +20,7 @@
 #include "../Enums/GameEnums.h"
 #include <vector>
 #include "../Network/Session.h"
+
 
 #undef ENABLE_DEBUG_MESSAGES
 
@@ -64,6 +64,7 @@ namespace Common
 		{
 			session.sendMessage("[Debug] " + message);
 		}
+
 
 
 		template<typename HashType>

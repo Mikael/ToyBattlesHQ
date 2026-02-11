@@ -11,6 +11,7 @@
     "boost-system",
     "boost-asio",
     "mariadb-connector-cpp",
+    "curl",
     {
       "name": "cryptopp",
       "features": [ "pem-pack" ]

@@ -7,6 +7,7 @@
 #include <openssl/rand.h>
 #include <cryptopp/osrng.h>
 #include <cryptopp/hex.h>
+#include <libbcrypt/include/bcrypt/BCrypt.hpp>
 
 namespace Auth
 {
@@ -58,8 +59,7 @@ namespace Auth
 			}
 		}
 
-		const std::string hashedPassword = Common::Utils::calculateHashCryptoPP<CryptoPP::SHA256>(plainPw);
-		const bool passwordOk = hashedPassword == ainfo.hashedPassword;
+		const bool passwordOk = BCrypt::validatePassword(plainPw, ainfo.hashedPassword);
 
 		bool tokenOk = verifyToken(ainfo.secret, token);
 
@@ -98,8 +98,7 @@ namespace Auth
 	Auth::Enums::Login AuthService::authorizeUngraded(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token, const std::string& plainPw)
 	{
 		const bool enhancedSecurity = Common::Utils::SetupParser::getInstance().getAuthSetup().enhancedSecurity;
-		const std::string hashedPassword = Common::Utils::calculateHashCryptoPP<CryptoPP::SHA256>(plainPw);
-		const bool passwordOk = hashedPassword == ainfo.hashedPassword;
+		const bool passwordOk = BCrypt::validatePassword(plainPw, ainfo.hashedPassword);
 
 		bool tokenOk = true;
 		if (ainfo.secret.empty())

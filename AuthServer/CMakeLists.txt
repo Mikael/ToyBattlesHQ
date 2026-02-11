@@ -20,7 +20,7 @@ target_link_libraries(AuthServer PUBLIC
 )
 
 if (WIN32)
-    target_link_libraries(AuthServer PUBLIC wsock32 ws2_32)
+    target_link_libraries(AuthServer PUBLIC ws2_32 wsock32)
 endif()
 
 find_package(OpenSSL REQUIRED)
