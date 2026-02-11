@@ -28,18 +28,22 @@ set_target_properties(Common PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_SOURCE_DIR}/ExternalLibraries/CommonLib
 )
 
+find_package(CURL REQUIRED)
+
 target_include_directories(Common
     PUBLIC
         ${CMAKE_CURRENT_LIST_DIR}
         ${CMAKE_CURRENT_LIST_DIR}/include
         ${CMAKE_SOURCE_DIR}/ExternalLibraries
         ${CMAKE_SOURCE_DIR}/Common/include/Utils
+        ${CURL_INCLUDE_DIRS}
 )
 
 target_link_libraries(Common
     PUBLIC   
         cryptopp::cryptopp
         unofficial::mariadb-connector-cpp::mariadbcpp
+        CURL::libcurl
 )
 
 if (WIN32)

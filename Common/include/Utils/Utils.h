@@ -6,6 +6,14 @@
 #include <cryptopp/hex.h>
 #include <cryptopp/filters.h>
 #include <cryptopp/base64.h>
+#include <cryptopp/aes.h>
+#include <cryptopp/gcm.h>
+#include <cryptopp/filters.h>
+#include <cryptopp/hex.h>
+#include <cryptopp/base64.h>
+#include <cryptopp/secblock.h>
+#include <boost/json.hpp>
+#include <curl/curl.h>
 
 #include <limits>
 #include <utility>
@@ -33,6 +41,9 @@ namespace Common
 {
 	namespace Utils
 	{
+		using namespace CryptoPP;
+		namespace json = boost::json;
+
 		inline std::optional<std::string> getLocalIp()
 		{
 			try
@@ -112,6 +123,117 @@ namespace Common
 		    std::cout << "\033]0;" << utf8title << "\007";
 		#endif
 		}
+
+		inline std::vector<byte> hexDecode(const std::string& hex) 
+		{
+			std::vector<byte> out(hex.size() / 2);
+			HexDecoder decoder;
+			decoder.Put((byte*)hex.data(), hex.size());
+			decoder.MessageEnd();
+			decoder.Get(out.data(), out.size());
+			return out;
+		}
+
+		inline std::optional<std::string> decryptAESGCM(const SecByteBlock& key, const std::vector<byte>& iv, const std::vector<byte>& tag, const std::vector<byte>& ct) 
+		{
+			GCM<AES>::Decryption decrypt;
+			decrypt.SetKeyWithIV(key, key.size(), iv.data(), iv.size());
+
+			std::string recovered;
+			try 
+			{
+				AuthenticatedDecryptionFilter df(decrypt, new StringSink(recovered), AuthenticatedDecryptionFilter::THROW_EXCEPTION, tag.size());
+				df.ChannelPut("AAD", nullptr, 0); 
+				df.ChannelPut("", ct.data(), ct.size());
+				df.ChannelPut("", tag.data(), tag.size());
+				df.ChannelMessageEnd("");
+			}
+			catch (const Exception& e) 
+			{
+				return std::nullopt;
+			}
+			return recovered;
+		}
+
+		inline std::optional<std::string> decryptEmail(const std::string& stored, const std::vector<SecByteBlock>& keyRing) 
+		{
+			const std::string PREFIX = "email:gcm:v1:";
+			if (stored.rfind(PREFIX, 0) != 0) return stored;
+
+			std::string jsonStr;
+			StringSource ss(stored.substr(PREFIX.size()), true, new Base64Decoder(new StringSink(jsonStr)));
+
+			json::value jv = json::parse(jsonStr);
+			json::object obj = jv.as_object();
+
+			std::vector<byte> iv = hexDecode(obj["iv"].as_string().c_str());
+			std::vector<byte> tag = hexDecode(obj["tag"].as_string().c_str());
+			std::vector<byte> ct = hexDecode(obj["ct"].as_string().c_str());
+
+			for (const auto& key : keyRing) 
+			{
+				try 
+				{
+					return decryptAESGCM(key, iv, tag, ct);
+				}
+				catch (...) 
+				{
+					continue;
+				}
+			}
+
+			return std::nullopt;
+		}
+
+		inline size_t payload_source(void* ptr, size_t size, size_t nmemb, void* userp) 
+		{
+			std::string* data = reinterpret_cast<std::string*>(userp);
+			size_t max = size * nmemb;
+			if (data->empty())
+				return 0;
+			size_t copy_size = (data->size() < max) ? data->size() : max;
+			memcpy(ptr, data->c_str(), copy_size);
+			data->erase(0, copy_size);
+			return copy_size;
+		}
+
+		inline bool sendEmail(const std::string& smtpServer, const std::string& smtpUser, const std::string& smtpPass, const std::string& from, const std::string& to,
+			const std::string& subject, const std::string& body)
+		{
+			CURL* curl = curl_easy_init();
+			if (!curl) return false;
+
+			struct curl_slist* recipients = nullptr;
+			recipients = curl_slist_append(recipients, to.c_str());
+
+			std::string data = "To: " + to + "\r\n" +
+				"From: " + from + "\r\n" +
+				"Subject: " + subject + "\r\n" +
+				"\r\n" + body + "\r\n";
+
+			curl_easy_setopt(curl, CURLOPT_USERNAME, smtpUser.c_str());
+			curl_easy_setopt(curl, CURLOPT_PASSWORD, smtpPass.c_str());
+			curl_easy_setopt(curl, CURLOPT_URL, smtpServer.c_str());
+			curl_easy_setopt(curl, CURLOPT_MAIL_FROM, from.c_str());
+			curl_easy_setopt(curl, CURLOPT_MAIL_RCPT, recipients);
+			curl_easy_setopt(curl, CURLOPT_READFUNCTION, payload_source);
+			curl_easy_setopt(curl, CURLOPT_READDATA, &data);
+			curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
+			//curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+			curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_ALL);
+
+			CURLcode res = curl_easy_perform(curl);
+			//if (res != CURLE_OK) {
+				//fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+			//}
+
+			curl_slist_free_all(recipients);
+			curl_easy_cleanup(curl);
+
+			return res == CURLE_OK;
+		}
+
+
 	}
 }
 
