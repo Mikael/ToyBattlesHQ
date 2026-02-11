@@ -33,20 +33,14 @@ namespace Auth
                         auto endpoints = resolver.resolve(server.ip, std::to_string(server.ipcPort), ec);
                         if (ec)
                         {
-                            ::Utils::Logger::log("Failed to resolve " + server.ip, ::Utils::LogType::Warning, "Auth::getPlayerCountFromMain");
                             continue;
                         }
 
                         asio::connect(socket, endpoints, ec);
                         if (ec)
                         {
-                            ::Utils::Logger::log("Failed to connect to " + server.ip + ":" + std::to_string(server.ipcPort),
-                                ::Utils::LogType::Warning, "Auth::getPlayerCountFromMain");
                             continue;
                         }
-
-                        ::Utils::Logger::log("Successfully connected to " + server.ip + ":" + std::to_string(server.ipcPort),
-                            ::Utils::LogType::Info, "Auth::getPlayerCountFromMain");
 
                         Common::Network::UnecryptedPacket packet;
 
@@ -57,7 +51,6 @@ namespace Auth
                         asio::write(socket, asio::buffer(packet.generateOutgoingPacket()), ec);
                         if (ec)
                         {
-                            ::Utils::Logger::log("Failed to send IP to " + server.ip, ::Utils::LogType::Warning, "Auth::getPlayerCountFromMain");
                             continue;
                         }
 
@@ -68,7 +61,6 @@ namespace Auth
                         asio::write(socket, asio::buffer(packet.generateOutgoingPacket()), ec);
                         if (ec)
                         {
-                            ::Utils::Logger::log("Failed to send request to " + server.ip, ::Utils::LogType::Warning, "Auth::getPlayerCountFromMain");
                             continue;
                         }
 
@@ -95,7 +87,6 @@ namespace Auth
 
                         if (ec == asio::error::operation_aborted || bytesRead == 0)
                         {
-                            ::Utils::Logger::log("Timeout / no response from " + server.ip, ::Utils::LogType::Warning, "Auth::getPlayerCountFromMain");
                             continue;
                         }
 
