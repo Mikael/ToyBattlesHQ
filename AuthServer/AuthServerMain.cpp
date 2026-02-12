@@ -8,6 +8,12 @@
 #include <Utils/SetupParser.h>
 #include "Utils/Utils.h"
 
+
+#include <cryptopp/hex.h>
+#include <cryptopp/secblock.h>
+#include <cryptopp/filters.h>
+using namespace CryptoPP;
+
 int main()
 {
 	Common::Utils::setConsoleTitle(L"Microvolts Auth Server");
