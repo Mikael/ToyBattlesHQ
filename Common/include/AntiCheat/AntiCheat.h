@@ -90,14 +90,13 @@ namespace Ac
             {
                 ::Utils::Logger::log("Error connecting to MariaDB: " + std::string(e.what()),
                     Utils::LogType::Error, "AntiCheat::connectToDb");
-                throw;
             }
         }
 
     public:
         AntiCheatManager()
         {
-            registerChecker<PacketFloodChecker>();
+            //registerChecker<PacketFloodChecker>();
             registerChecker<PacketReplicationChecker>();
 
             m_isRunning = true;

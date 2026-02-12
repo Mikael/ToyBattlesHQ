@@ -1,5 +1,7 @@
 project(Common LANGUAGES CXX)
 
+find_package(boost_json CONFIG REQUIRED)
+
 add_subdirectory(${CMAKE_SOURCE_DIR}/ExternalLibraries/libbcrypt
                  ${CMAKE_BINARY_DIR}/libbcrypt_build)
 
@@ -31,6 +33,7 @@ target_link_libraries(Common
         cryptopp::cryptopp
         unofficial::mariadb-connector-cpp::mariadbcpp
         bcrypt          # libbcrypt
+        Boost::json
 )
 
 if(WIN32)

@@ -39,6 +39,11 @@ namespace Main
 				MP::MainScheduler& scheduler, std::uint32_t,
 				Main::MainServer& mainSv) override
 			{
+				if (Common::Utils::SetupParser::getInstance().getAuthSetup().enhancedSecurity)
+				{
+					session->sendMessage("error: this command is currently disabled due to enhanced security being enabled.");
+					return;
+				}
 				if (!parseCommand(command))
 				{
 					session->sendMessage("parsing error");
