@@ -37,6 +37,7 @@ namespace Common
             std::uint32_t port;
             std::uint32_t ipcPort;
             std::uint32_t serverNumber;
+            bool IPC_enableDeadBroadcast;
         };
 
         struct DatabaseSetup

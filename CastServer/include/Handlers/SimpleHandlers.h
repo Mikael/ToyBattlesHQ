@@ -23,6 +23,8 @@ namespace Cast
     {
         inline bool sendPlayerStateUpdate(std::uint32_t accountID, bool isDead)
         {
+            if (!Common::Utils::SetupParser::getInstance().getSelfCastServerInfo().IPC_enableDeadBroadcast) return false;
+
             Common::Network::UnecryptedPacket packet;
 
             try

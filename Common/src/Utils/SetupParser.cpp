@@ -81,6 +81,21 @@ namespace Common
                         ::Utils::Logger::log(castServerSection + " has wrong data in config.ini", ::Utils::LogType::Error, "SetupParser::checkMainCastSession");
                         return false;
                     }
+                    if (!castServer.contains("IPC_EnableDeadBroadcast"))
+                    {
+                        ::Utils::Logger::log(castServerSection + " is missing 'IPC_EnableDeadBroadcast' key", ::Utils::LogType::Error, "SetupParser::checkMainCastSession");
+                        return false;
+                    }
+                    try
+                    {
+                        bool ipcDeadBroadcast = castServer["IPC_EnableDeadBroadcast"].as<bool>();
+                        (void)ipcDeadBroadcast; // unused variable warning
+                    }
+                    catch (const std::exception& e)
+                    {
+                        ::Utils::Logger::log(castServerSection + " has invalid 'IPC_EnableDeadBroadcast' value (must be true/false)", ::Utils::LogType::Error, "SetupParser::checkMainCastSession");
+                        return false;
+                    }
 
                     bool isMainLocalIpMatching = (mainLocalIp == *localIp);
                     bool isCastLocalIpMatching = (castLocalIp == *localIp);
@@ -334,6 +349,7 @@ namespace Common
                     cast.ipcPort = section["IpcPort"].as<std::uint32_t>();
                     cast.serverNumber = std::stoi(sectionName.substr(11));
                     cast.localIp = section["LocalIp"].as<std::string>();
+                    cast.IPC_enableDeadBroadcast = section["IPC_EnableDeadBroadcast"].as<bool>();
                     castServers.push_back(cast);
                 }
             }
