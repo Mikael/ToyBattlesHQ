@@ -10,7 +10,7 @@
 #include "../../include/Structures/PlayerLists/BlockedPlayer.h"
 #include "../../include/Structures/Mailbox.h"
 #include "../../include/Structures/AccountInfo/MuteInfo.h"
-
+#include "../../include/Persistence/TransactionGuard.h"
 #include "../../include/Persistence/MainDatabaseManager.h"
 #include "../../include/MainEnums.h"
 #include "Utils/Constants.h"
@@ -26,8 +26,23 @@ namespace Main
     {
         PersistentDatabase::PersistentDatabase()
         {
-           connectWithRetry();
+            connectWithRetry();
+            initialize();
         }
+
+        void PersistentDatabase::initialize()
+        {
+            std::unique_ptr<sql::Statement> stmt(m_transactionalCon->createStatement());
+
+            stmt->execute("CREATE TABLE IF NOT EXISTS EventMissionsInfo (StartDate DATETIME NOT NULL, EndDate DATETIME NOT NULL)");
+            stmt->execute("CREATE TABLE IF NOT EXISTS TradeEvents (StartDate DATETIME NOT NULL, EndDate DATETIME NOT NULL)");
+            stmt->execute("CREATE TABLE IF NOT EXISTS CapsuleEvents (StartDate DATETIME NOT NULL, EndDate DATETIME NOT NULL, NewMpPrice INT NOT NULL, NewRtPrice INT NOT NULL)");
+            stmt->execute("CREATE TABLE IF NOT EXISTS ExpMpBonusEvents (StartDate DATETIME NOT NULL, EndDate DATETIME NOT NULL, ExpBonusPercent INT NOT NULL, MpBonusPercent INT NOT NULL)");
+            stmt->execute(R"(CREATE TABLE IF NOT EXISTS GameLogs (ID INT AUTO_INCREMENT PRIMARY KEY,LogType VARCHAR(255) NOT NULL,Message TEXT NOT NULL,
+                Severity VARCHAR(20) NOT NULL,CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP))");
+            stmt->execute("ALTER TABLE Users ADD COLUMN IF NOT EXISTS VotekickDisabledUntil DATETIME NULL DEFAULT NULL");
+        }
+
 
         void PersistentDatabase::connectWithRetry()
         {
@@ -39,66 +54,31 @@ namespace Main
             {
                 try
                 {
-                    ::Utils::Logger::log("Connecting to MariaDB (attempt " +std::to_string(attempt) + ")", Utils::LogType::Info, "PersistentDatabase");
+                    ::Utils::Logger::log("Connecting to MariaDB (attempt " + std::to_string(attempt) + ")", Utils::LogType::Info, "PersistentDatabase");
 
-                    m_con = sql::mariadb::get_driver_instance()->connect("tcp://" + dbSetup.ip + ":" + std::to_string(dbSetup.port),dbSetup.username,dbSetup.password);
-
+                    m_con = sql::mariadb::get_driver_instance()->connect("tcp://" + dbSetup.ip + ":" + std::to_string(dbSetup.port), dbSetup.username, dbSetup.password);
                     m_con->setSchema(dbSetup.databaseName);
                     m_con->setAutoCommit(true);
 
+                    m_transactionalCon = sql::mariadb::get_driver_instance()->connect("tcp://" + dbSetup.ip + ":" + std::to_string(dbSetup.port), dbSetup.username, dbSetup.password);
+                    m_transactionalCon->setSchema(dbSetup.databaseName);
+                    m_transactionalCon->setAutoCommit(false);
+
                     ::Utils::Logger::log("Connected to MariaDB successfully", Utils::LogType::Info, "PersistentDatabase");
 
-                    return; 
+                    return;
                 }
                 catch (const sql::SQLException& e)
                 {
-                    ::Utils::Logger::log("Connection failed: " + std::string(e.what()),Utils::LogType::Error, "PersistentDatabase");
+                    ::Utils::Logger::log("Connection failed: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase");
 
                     if (attempt == maxRetries)
                     {
-                        ::Utils::Logger::log("Max connection retries reached!", Utils::LogType::Error,"PersistentDatabase");
+                        ::Utils::Logger::log("Max connection retries reached!", Utils::LogType::Error, "PersistentDatabase");
                         throw;
                     }
 
                     std::this_thread::sleep_for(std::chrono::seconds(1 * attempt));
-                }
-            }
-        }
-
-        void PersistentDatabase::reconnect()
-        {
-            if (m_con)
-            {
-                try { m_con->close(); } catch (...) {}
-                delete m_con;
-                m_con = nullptr;
-            }
-
-            connectWithRetry();
-        }
-
-        void PersistentDatabase::pingDatabase()
-        {
-            try
-            {
-                if (m_con && !m_con->isClosed())
-                {
-                    std::unique_ptr<sql::Statement> stmt(m_con->createStatement());
-                    stmt->execute("SELECT 1"); 
-                }
-            }
-            catch (const sql::SQLException& e)
-            {
-                ::Utils::Logger::log("MariaDB ping failed: " + std::string(e.what()) + ", reconnecting", 
-                    Utils::LogType::Warning, "PersistentDatabase::pingDatabase");
-
-                try
-                {
-                    reconnect();
-                }
-                catch (const sql::SQLException& e)
-                {
-                    ::Utils::Logger::log("Reconnection failed: " + std::string(e.what()),Utils::LogType::Error, "PersistentDatabase::pingDatabase");
                 }
             }
         }
@@ -117,9 +97,7 @@ namespace Main
                 stmt->setUInt(1, newAmount);
                 stmt->setUInt(2, accountID);
 
-                if (stmt->executeUpdate() == 0)
-                {
-                }
+                stmt->executeUpdate();
             }
             catch (const sql::SQLException& e)
             {
@@ -197,10 +175,12 @@ namespace Main
 
             try
             {
+                TransactionGuard guard(m_transactionalCon);
+
                 std::string selectSql = "SELECT TotalMission1, TotalMission2, TotalMission3, TotalMission4, TotalMission5 "
                     "FROM EventMissions WHERE AccountID = ?";
 
-                std::unique_ptr<sql::PreparedStatement> selectStmt(m_con->prepareStatement(selectSql));
+                std::unique_ptr<sql::PreparedStatement> selectStmt(m_transactionalCon->prepareStatement(selectSql));
                 selectStmt->setUInt(1, accountID);
 
                 std::unique_ptr<sql::ResultSet> res(selectStmt->executeQuery());
@@ -223,7 +203,7 @@ namespace Main
                 {
                     std::string insertSql = "INSERT INTO EventMissions (AccountID, TotalMission1, TotalMission2, TotalMission3, "
                         "TotalMission4, TotalMission5) VALUES (?, 0, 0, 0, 0, 0)";
-                    std::unique_ptr<sql::PreparedStatement> insertStmt(m_con->prepareStatement(insertSql));
+                    std::unique_ptr<sql::PreparedStatement> insertStmt(m_transactionalCon->prepareStatement(insertSql));
                     insertStmt->setUInt(1, accountID);
                     insertStmt->executeUpdate();
 
@@ -232,6 +212,8 @@ namespace Main
                         missions[i] = 0;
                     }
                 }
+
+                guard.commit();
             }
             catch (const sql::SQLException& e)
             {
@@ -241,113 +223,94 @@ namespace Main
             return missions;
         }
 
-	std::optional<Main::Structures::EventMissionInfo> PersistentDatabase::getEventInfo(const std::string& tableName)
-	{
-	    try
-	    {
-		const std::string createTableQuery =
-		    "CREATE TABLE IF NOT EXISTS " + tableName + " ("
-		    "StartDate DATETIME NOT NULL, "
-		    "EndDate DATETIME NOT NULL)";
-		std::unique_ptr<sql::PreparedStatement> createStmt(m_con->prepareStatement(createTableQuery));
-		createStmt->executeUpdate();
+        std::optional<Main::Structures::EventMissionInfo> PersistentDatabase::getEventInfo(const std::string& tableName)
+        {
+            try
+            {
+                TransactionGuard guard(m_transactionalCon);
 
-		const std::string query =
-		    "SELECT UNIX_TIMESTAMP(StartDate) AS StartTimestamp, "
-		    "UNIX_TIMESTAMP(EndDate) AS EndTimestamp "
-		    "FROM " + tableName + " LIMIT 1";
-		std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(query));
-		std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
+                const std::string query = "SELECT UNIX_TIMESTAMP(StartDate) AS StartTimestamp, "
+                    "UNIX_TIMESTAMP(EndDate) AS EndTimestamp FROM " + tableName + " LIMIT 1";
+                std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(query));
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
-		if (res->next())
-		{
-		    Main::Structures::EventMissionInfo info;
-		    info.startDate = res->getUInt("StartTimestamp");
-		    info.endDate = res->getUInt("EndTimestamp");
-		    return info;
-		}
-		else
-		{
-		    const std::string insertQuery =
-		        "INSERT INTO " + tableName + " (StartDate, EndDate) "
-		        "VALUES (FROM_UNIXTIME(0), FROM_UNIXTIME(0))";
-		    std::unique_ptr<sql::PreparedStatement> insertStmt(m_con->prepareStatement(insertQuery));
-		    insertStmt->executeUpdate();
-		    return Main::Structures::EventMissionInfo{ 0, 0 };
-		}
-	    }
-	    catch (const sql::SQLException& e)
-	    {
-		::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getEventInfo (" + tableName + ")");
-	    }
+                if (res->next())
+                {
+                    Main::Structures::EventMissionInfo info;
+                    info.startDate = res->getUInt("StartTimestamp");
+                    info.endDate = res->getUInt("EndTimestamp");
+                    guard.commit();
+                    return info;
+                }
+                else
+                {
+                    const std::string insertQuery = "INSERT INTO " + tableName + " (StartDate, EndDate) "
+                        "VALUES (FROM_UNIXTIME(0), FROM_UNIXTIME(0))";
+                    std::unique_ptr<sql::PreparedStatement> insertStmt(m_transactionalCon->prepareStatement(insertQuery));
+                    insertStmt->executeUpdate();
+                    guard.commit();
+                    return Main::Structures::EventMissionInfo{ 0, 0 };
+                }
+            }
+            catch (const sql::SQLException& e)
+            {
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getEventInfo (" + tableName + ")");
+            }
 
-	    return std::nullopt;
-	}
+            return std::nullopt;
+        }
 
         std::optional<Main::Structures::CapsuleListDatabase> PersistentDatabase::getCapsuleEvent()
         {
             try
-		{
-		    const std::string createTableQuery = R"(
-			CREATE TABLE IF NOT EXISTS CapsuleEvents (
-			    StartDate DATETIME NOT NULL,
-			    EndDate DATETIME NOT NULL,
-			    NewMpPrice INT NOT NULL,
-			    NewRtPrice INT NOT NULL
-			)
-		    )";
-		    std::unique_ptr<sql::PreparedStatement> createStmt(m_con->prepareStatement(createTableQuery));
-		    createStmt->executeUpdate();
+            {
+                TransactionGuard guard(m_transactionalCon);
 
-		    const std::string query = R"(
-			SELECT UNIX_TIMESTAMP(StartDate) AS StartTimestamp,
-			       UNIX_TIMESTAMP(EndDate) AS EndTimestamp,
-			       NewMpPrice,
-			       NewRtPrice
-			FROM CapsuleEvents
-			LIMIT 1
-		    )";
+                const std::string query = R"(SELECT UNIX_TIMESTAMP(StartDate) AS StartTimestamp,UNIX_TIMESTAMP(EndDate) AS EndTimestamp,
+                   NewMpPrice,NewRtPrice FROM CapsuleEvents LIMIT 1)";
 
-		    std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(query));
-		    std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
+                std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(query));
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
-		    if (res->next())
-		    {
-			Main::Structures::CapsuleListDatabase capsule;
-			capsule.saleEventStartDate = res->getUInt("StartTimestamp");
-			capsule.saleEventEndDate = res->getUInt("EndTimestamp");
-			capsule.newMpPrice = res->getUInt("NewMpPrice");
-			capsule.newRtPrice = res->getUInt("NewRtPrice");
-			return capsule;
-		    }
-		    else
-		    {
-			const std::string insertQuery = R"(
-			    INSERT INTO CapsuleEvents (StartDate, EndDate, NewMpPrice, NewRtPrice)
-			    VALUES (FROM_UNIXTIME(0), FROM_UNIXTIME(0), 0, 0)
-			)";
+                if (res->next())
+                {
+                    Main::Structures::CapsuleListDatabase capsule;
+                    capsule.saleEventStartDate = res->getUInt("StartTimestamp");
+                    capsule.saleEventEndDate = res->getUInt("EndTimestamp");
+                    capsule.newMpPrice = res->getUInt("NewMpPrice");
+                    capsule.newRtPrice = res->getUInt("NewRtPrice");
 
-			std::unique_ptr<sql::PreparedStatement> insertStmt(m_con->prepareStatement(insertQuery));
-			insertStmt->executeUpdate();
+                    guard.commit();
+                    return capsule;
+                }
+                else
+                {
+                    const std::string insertQuery = R"(INSERT INTO CapsuleEvents (StartDate, EndDate, NewMpPrice, NewRtPrice)
+                      VALUES (FROM_UNIXTIME(0), FROM_UNIXTIME(0), 0, 0))";
 
-			Main::Structures::CapsuleListDatabase capsule{};
-			return capsule;
-		    }
-		}
-		catch (const sql::SQLException& e)
-		{
-		    ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getCapsuleEvent");
-		}
+                    std::unique_ptr<sql::PreparedStatement> insertStmt(m_transactionalCon->prepareStatement(insertQuery));
+                    insertStmt->executeUpdate();
 
-		return std::nullopt;
-	}
+                    guard.commit();
+                    return Main::Structures::CapsuleListDatabase{};
+                }
+            }
+            catch (const sql::SQLException& e)
+            {
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::getCapsuleEvent");
+            }
+
+            return std::nullopt;
+        }
 
         bool PersistentDatabase::updateCapsuleEvent(const Main::Structures::CapsuleListDatabase& capsule)
         {
             try
             {
+                TransactionGuard txn(m_transactionalCon);
+
                 const std::string checkQuery = "SELECT COUNT(*) as Count FROM CapsuleEvents";
-                std::unique_ptr<sql::PreparedStatement> checkStmt(m_con->prepareStatement(checkQuery));
+                std::unique_ptr<sql::PreparedStatement> checkStmt(m_transactionalCon->prepareStatement(checkQuery));
                 std::unique_ptr<sql::ResultSet> checkRes(checkStmt->executeQuery());
 
                 bool exists = false;
@@ -358,15 +321,10 @@ namespace Main
 
                 if (exists)
                 {
-                    const std::string updateQuery = R"(
-                        UPDATE CapsuleEvents
-                        SET StartDate = FROM_UNIXTIME(?),
-                            EndDate = FROM_UNIXTIME(?),
-                            NewMpPrice = ?,
-                            NewRtPrice = ?
-                    )";
+                    const std::string updateQuery = R"(UPDATE CapsuleEvents SET StartDate = FROM_UNIXTIME(?), EndDate = FROM_UNIXTIME(?),
+                    NewMpPrice = ?, NewRtPrice = ?)";
 
-                    std::unique_ptr<sql::PreparedStatement> updateStmt(m_con->prepareStatement(updateQuery));
+                    std::unique_ptr<sql::PreparedStatement> updateStmt(m_transactionalCon->prepareStatement(updateQuery));
                     updateStmt->setUInt(1, capsule.saleEventStartDate);
                     updateStmt->setUInt(2, capsule.saleEventEndDate);
                     updateStmt->setUInt(3, capsule.newMpPrice);
@@ -375,12 +333,9 @@ namespace Main
                 }
                 else
                 {
-                    const std::string insertQuery = R"(
-                        INSERT INTO CapsuleEvents (StartDate, EndDate, NewMpPrice, NewRtPrice)
-                        VALUES (FROM_UNIXTIME(?), FROM_UNIXTIME(?), ?, ?)
-                    )";
+                    const std::string insertQuery = R"(INSERT INTO CapsuleEvents (StartDate, EndDate, NewMpPrice, NewRtPrice) VALUES (FROM_UNIXTIME(?), FROM_UNIXTIME(?), ?, ?))";
 
-                    std::unique_ptr<sql::PreparedStatement> insertStmt(m_con->prepareStatement(insertQuery));
+                    std::unique_ptr<sql::PreparedStatement> insertStmt(m_transactionalCon->prepareStatement(insertQuery));
                     insertStmt->setUInt(1, capsule.saleEventStartDate);
                     insertStmt->setUInt(2, capsule.saleEventEndDate);
                     insertStmt->setUInt(3, capsule.newMpPrice);
@@ -388,12 +343,13 @@ namespace Main
                     insertStmt->executeUpdate();
                 }
 
+                txn.commit();
                 return true;
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateCapsuleEvent");
-                return false;
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error,"PersistentDatabase::updateCapsuleEvent");
+                return false; 
             }
         }
 
@@ -403,12 +359,11 @@ namespace Main
 
             try
             {
-                const std::string query = R"(
-                    INSERT INTO ItemLogs (AccountID, Date, ItemNumber, ItemID, Action, ExpirationDate)
-                    VALUES (?, NOW(), ?, ?, ?, ?)
-                )";
+                TransactionGuard txn(m_transactionalCon);
 
-                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(query));
+                const std::string query = R"(INSERT INTO ItemLogs (AccountID, Date, ItemNumber, ItemID, Action, ExpirationDate) VALUES (?, NOW(), ?, ?, ?, ?))";
+
+                std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(query));
 
                 for (const auto& log : logs)
                 {
@@ -420,24 +375,21 @@ namespace Main
                     stmt->executeUpdate();
                 }
 
+                txn.commit();
                 return true;
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::insertItemLogs");
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::insertItemLogs");
+                return false; 
             }
-
-            return false;
         }
 
         bool PersistentDatabase::insertItemLog(std::uint32_t accountId, const Main::Structures::ItemLogInfo& log)
         {
             try
             {
-                const std::string query = R"(
-                    INSERT INTO ItemLogs (AccountID, Date, ItemNumber, ItemID, Action, ExpirationDate)
-                    VALUES (?, NOW(), ?, ?, ?, ?)
-                )";
+                const std::string query = R"(INSERT INTO ItemLogs (AccountID, Date, ItemNumber, ItemID, Action, ExpirationDate) VALUES (?, NOW(), ?, ?, ?, ?))";
 
                 std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(query));
                 stmt->setUInt64(1, accountId);
@@ -502,125 +454,107 @@ namespace Main
             return insertItemLogs(accountId, logInfos);
         }
 
-
         bool PersistentDatabase::updateEventInfo(const std::string& tableName, const Main::Structures::EventMissionInfo& info)
         {
             try
             {
+                TransactionGuard txn(m_transactionalCon);
+
                 const std::string ensureRowQuery = "SELECT COUNT(*) AS RowCount FROM " + tableName;
-                std::unique_ptr<sql::PreparedStatement> checkStmt(m_con->prepareStatement(ensureRowQuery));
+                std::unique_ptr<sql::PreparedStatement> checkStmt(m_transactionalCon->prepareStatement(ensureRowQuery));
                 std::unique_ptr<sql::ResultSet> checkRes(checkStmt->executeQuery());
 
                 if (checkRes->next() && checkRes->getUInt("RowCount") == 0)
                 {
-                    const std::string insertQuery =
-                        "INSERT INTO " + tableName + " (StartDate, EndDate) "
+                    const std::string insertQuery = "INSERT INTO " + tableName + " (StartDate, EndDate) "
                         "VALUES (FROM_UNIXTIME(0), FROM_UNIXTIME(0))";
 
-                    std::unique_ptr<sql::PreparedStatement> insertStmt(m_con->prepareStatement(insertQuery));
+                    std::unique_ptr<sql::PreparedStatement> insertStmt(m_transactionalCon->prepareStatement(insertQuery));
                     insertStmt->executeUpdate();
                 }
 
-                const std::string updateQuery =
-                    "UPDATE " + tableName + " "
-                    "SET StartDate = FROM_UNIXTIME(?), "
+                const std::string updateQuery = "UPDATE " + tableName + " SET StartDate = FROM_UNIXTIME(?), "
                     "EndDate = FROM_UNIXTIME(?) LIMIT 1";
 
-                std::unique_ptr<sql::PreparedStatement> updateStmt(m_con->prepareStatement(updateQuery));
+                std::unique_ptr<sql::PreparedStatement> updateStmt(m_transactionalCon->prepareStatement(updateQuery));
                 updateStmt->setUInt(1, info.startDate);
                 updateStmt->setUInt(2, info.endDate);
 
-                return updateStmt->executeUpdate() > 0;
+                bool success = updateStmt->executeUpdate() > 0;
+                txn.commit(); 
+                return success;
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateEventInfo (" + tableName + ")");
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::updateEventInfo (" + tableName + ")");
             }
 
-            return false;
+            return false; 
         }
 
+
         std::optional<Main::Structures::ExpMpBonusInfo> PersistentDatabase::getExpMpBonusInfo()
-	{
-	    try
-	    {
-		const std::string createTableQuery =
-		    "CREATE TABLE IF NOT EXISTS ExpMpBonusEvents ("
-		    "StartDate DATETIME NOT NULL, "
-		    "EndDate DATETIME NOT NULL, "
-		    "ExpBonusPercent INT NOT NULL, "
-		    "MpBonusPercent INT NOT NULL)";
-		std::unique_ptr<sql::PreparedStatement> createStmt(m_con->prepareStatement(createTableQuery));
-		createStmt->executeUpdate();
+        {
+            try
+            {
+                TransactionGuard txn(m_transactionalCon);
 
-		const std::string query = R"(
-		    SELECT UNIX_TIMESTAMP(StartDate) AS StartTimestamp,
-		           UNIX_TIMESTAMP(EndDate) AS EndTimestamp,
-		           ExpBonusPercent,
-		           MpBonusPercent
-		    FROM ExpMpBonusEvents
-		    LIMIT 1
-		)";
-		std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(query));
-		std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
+                const std::string query = R"(SELECT UNIX_TIMESTAMP(StartDate) AS StartTimestamp, UNIX_TIMESTAMP(EndDate) AS EndTimestamp,
+                   ExpBonusPercent, MpBonusPercent FROM ExpMpBonusEvents LIMIT 1)";
+                std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(query));
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
-		if (res->next())
-		{
-		    Main::Structures::ExpMpBonusInfo info;
-		    info.startDate = res->getUInt("StartTimestamp");
-		    info.endDate = res->getUInt("EndTimestamp");
-		    info.expBonusPercent = res->getUInt("ExpBonusPercent");
-		    info.mpBonusPercent = res->getUInt("MpBonusPercent");
-		    return info;
-		}
-		else
-		{
-		    const std::string insertQuery = R"(
-		        INSERT INTO ExpMpBonusEvents (StartDate, EndDate, ExpBonusPercent, MpBonusPercent)
-		        VALUES (FROM_UNIXTIME(0), FROM_UNIXTIME(0), 0, 0)
-		    )";
-		    std::unique_ptr<sql::PreparedStatement> insertStmt(m_con->prepareStatement(insertQuery));
-		    insertStmt->executeUpdate();
-		    return Main::Structures::ExpMpBonusInfo{ 0, 0, 0, 0 };
-		}
-	    }
-	    catch (const sql::SQLException& e)
-	    {
-		::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getExpMpBonusInfo");
-	    }
+                if (res->next())
+                {
+                    Main::Structures::ExpMpBonusInfo info;
+                    info.startDate = res->getUInt("StartTimestamp");
+                    info.endDate = res->getUInt("EndTimestamp");
+                    info.expBonusPercent = res->getUInt("ExpBonusPercent");
+                    info.mpBonusPercent = res->getUInt("MpBonusPercent");
+                    txn.commit();
+                    return info;
+                }
+                else
+                {
+                    const std::string insertQuery = R"(INSERT INTO ExpMpBonusEvents (StartDate, EndDate, ExpBonusPercent, MpBonusPercent) 
+                        VALUES (FROM_UNIXTIME(0), FROM_UNIXTIME(0), 0, 0))";
+                    std::unique_ptr<sql::PreparedStatement> insertStmt(m_transactionalCon->prepareStatement(insertQuery));
+                    insertStmt->executeUpdate();
+                    txn.commit();
+                    return Main::Structures::ExpMpBonusInfo{ 0, 0, 0, 0 };
+                }
+            }
+            catch (const sql::SQLException& e)
+            {
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::getExpMpBonusInfo");
+            }
 
-	    return std::nullopt;
-	}
+            return std::nullopt;
+        }
 
         bool PersistentDatabase::updateExpMpBonusInfo(const Main::Structures::ExpMpBonusInfo& info)
         {
             try
             {
+                TransactionGuard txn(m_transactionalCon);
+
                 const std::string checkQuery = R"(SELECT COUNT(*) AS RowCount FROM ExpMpBonusEvents)";
-                std::unique_ptr<sql::PreparedStatement> checkStmt(m_con->prepareStatement(checkQuery));
+                std::unique_ptr<sql::PreparedStatement> checkStmt(m_transactionalCon->prepareStatement(checkQuery));
                 std::unique_ptr<sql::ResultSet> checkRes(checkStmt->executeQuery());
 
                 if (checkRes->next() && checkRes->getUInt("RowCount") == 0)
                 {
-                    const std::string insertQuery = R"(
-                        INSERT INTO ExpMpBonusEvents (StartDate, EndDate, ExpBonusPercent, MpBonusPercent)
-                        VALUES (FROM_UNIXTIME(0), FROM_UNIXTIME(0), 0, 0)
-                    )";
+                    const std::string insertQuery = R"(INSERT INTO ExpMpBonusEvents (StartDate, EndDate, ExpBonusPercent, MpBonusPercent)
+                        VALUES (FROM_UNIXTIME(0), FROM_UNIXTIME(0), 0, 0))";
 
-                    std::unique_ptr<sql::PreparedStatement> insertStmt(m_con->prepareStatement(insertQuery));
+                    std::unique_ptr<sql::PreparedStatement> insertStmt(m_transactionalCon->prepareStatement(insertQuery));
                     insertStmt->executeUpdate();
                 }
 
-                const std::string updateQuery = R"(
-                    UPDATE ExpMpBonusEvents
-                    SET StartDate = FROM_UNIXTIME(?),
-                        EndDate = FROM_UNIXTIME(?),
-                        ExpBonusPercent = ?,
-                        MpBonusPercent = ?
-                    LIMIT 1
-                )";
+                const std::string updateQuery = R"(UPDATE ExpMpBonusEvents SET StartDate = FROM_UNIXTIME(?), EndDate = FROM_UNIXTIME(?), ExpBonusPercent = ?,
+                    MpBonusPercent = ? LIMIT 1)";
 
-                std::unique_ptr<sql::PreparedStatement> updateStmt(m_con->prepareStatement(updateQuery));
+                std::unique_ptr<sql::PreparedStatement> updateStmt(m_transactionalCon->prepareStatement(updateQuery));
                 updateStmt->setUInt(1, info.startDate);
                 updateStmt->setUInt(2, info.endDate);
                 updateStmt->setUInt(3, info.expBonusPercent);
@@ -629,23 +563,24 @@ namespace Main
 
                 const std::string updateModes = R"(UPDATE EventModes SET EndDate = FROM_UNIXTIME(?))";
                 {
-                    std::unique_ptr<sql::PreparedStatement> updateStmtModes(m_con->prepareStatement(updateModes));
+                    std::unique_ptr<sql::PreparedStatement> updateStmtModes(m_transactionalCon->prepareStatement(updateModes));
                     updateStmtModes->setUInt(1, info.endDate);
                     updateStmtModes->executeUpdate();
                 }
 
                 const std::string updateMaps = R"(UPDATE EventMaps SET EndDate = FROM_UNIXTIME(?))";
                 {
-                    std::unique_ptr<sql::PreparedStatement> updateStmtMaps(m_con->prepareStatement(updateMaps));
+                    std::unique_ptr<sql::PreparedStatement> updateStmtMaps(m_transactionalCon->prepareStatement(updateMaps));
                     updateStmtMaps->setUInt(1, info.endDate);
                     updateStmtMaps->executeUpdate();
                 }
 
+                txn.commit();
                 return true;
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateExpMpBonusInfo");
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::updateExpMpBonusInfo");
             }
 
             return false;
@@ -655,15 +590,16 @@ namespace Main
         {
             if (missionID == 0 || missionID > Common::Constants::totalEventMissions)
             {
-                ::Utils::Logger::log("Invalid mission ID: " + std::to_string(missionID),
-                    Utils::LogType::Warning, "PersistentDatabase::updatePlayerMissionProgress");
+                ::Utils::Logger::log("Invalid mission ID: " + std::to_string(missionID),Utils::LogType::Warning, "PersistentDatabase::updatePlayerMissionProgress");
                 return false;
             }
 
             try
             {
+                TransactionGuard txn(m_transactionalCon);
+
                 std::string checkSql = "SELECT COUNT(*) FROM EventMissions WHERE AccountID = ?";
-                std::unique_ptr<sql::PreparedStatement> checkStmt(m_con->prepareStatement(checkSql));
+                std::unique_ptr<sql::PreparedStatement> checkStmt(m_transactionalCon->prepareStatement(checkSql));
                 checkStmt->setUInt(1, accountID);
                 std::unique_ptr<sql::ResultSet> checkRes(checkStmt->executeQuery());
 
@@ -677,17 +613,16 @@ namespace Main
                 {
                     std::string column = "TotalMission" + std::to_string(missionID);
                     std::string updateSql = "UPDATE EventMissions SET " + column + " = ? WHERE AccountID = ?";
-                    std::unique_ptr<sql::PreparedStatement> updateStmt(m_con->prepareStatement(updateSql));
+                    std::unique_ptr<sql::PreparedStatement> updateStmt(m_transactionalCon->prepareStatement(updateSql));
                     updateStmt->setUInt(1, newProgress);
                     updateStmt->setUInt(2, accountID);
                     updateStmt->executeUpdate();
                 }
                 else
                 {
-                    std::string insertSql =
-                        "INSERT INTO EventMissions (AccountID, TotalMission1, TotalMission2, TotalMission3, TotalMission4, TotalMission5) "
+                    std::string insertSql = "INSERT INTO EventMissions (AccountID, TotalMission1, TotalMission2, TotalMission3, TotalMission4, TotalMission5) "
                         "VALUES (?, ?, ?, ?, ?, ?)";
-                    std::unique_ptr<sql::PreparedStatement> insertStmt(m_con->prepareStatement(insertSql));
+                    std::unique_ptr<sql::PreparedStatement> insertStmt(m_transactionalCon->prepareStatement(insertSql));
                     insertStmt->setUInt(1, accountID);
                     for (int i = 1; i <= Common::Constants::totalEventMissions; ++i)
                     {
@@ -696,12 +631,12 @@ namespace Main
                     insertStmt->executeUpdate();
                 }
 
+                txn.commit();
                 return true;
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),
-                    Utils::LogType::Error, "PersistentDatabase::updatePlayerMissionProgress");
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error, "PersistentDatabase::updatePlayerMissionProgress");
                 return false;
             }
         }
@@ -716,8 +651,10 @@ namespace Main
 
             try
             {
+                TransactionGuard txn(m_transactionalCon);
+
                 std::string checkSql = "SELECT COUNT(*) FROM EventMissions WHERE AccountID = ?";
-                std::unique_ptr<sql::PreparedStatement> checkStmt(m_con->prepareStatement(checkSql));
+                std::unique_ptr<sql::PreparedStatement> checkStmt(m_transactionalCon->prepareStatement(checkSql));
                 checkStmt->setUInt(1, accountID);
                 std::unique_ptr<sql::ResultSet> res(checkStmt->executeQuery());
 
@@ -730,9 +667,8 @@ namespace Main
                 std::array<std::uint32_t, Common::Constants::totalEventMissions> totals{};
                 if (exists)
                 {
-                    std::string fetchSql = 
-                        "SELECT TotalMission1, TotalMission2, TotalMission3, TotalMission4, TotalMission5 FROM EventMissions WHERE AccountID = ?";
-                    std::unique_ptr<sql::PreparedStatement> fetchStmt(m_con->prepareStatement(fetchSql));
+                    std::string fetchSql = "SELECT TotalMission1, TotalMission2, TotalMission3, TotalMission4, TotalMission5 FROM EventMissions WHERE AccountID = ?";
+                    std::unique_ptr<sql::PreparedStatement> fetchStmt(m_transactionalCon->prepareStatement(fetchSql));
                     fetchStmt->setUInt(1, accountID);
                     std::unique_ptr<sql::ResultSet> fetchRes(fetchStmt->executeQuery());
                     if (fetchRes->next())
@@ -760,20 +696,20 @@ namespace Main
                 {
                     std::string updateSql = "UPDATE EventMissions SET TotalMission1 = ?, TotalMission2 = ?, TotalMission3 = ?, "
                         "TotalMission4 = ?, TotalMission5 = ? WHERE AccountID = ?";
-                    std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(updateSql));
+                    std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(updateSql));
 
                     for (int i = 0; i < Common::Constants::totalEventMissions; ++i)
                     {
                         stmt->setUInt(i + 1, totals[i]);
                     }
-                    stmt->setUInt(6, accountID); 
+                    stmt->setUInt(6, accountID);
                     stmt->executeUpdate();
                 }
                 else
                 {
                     std::string insertSql = "INSERT INTO EventMissions (AccountID, TotalMission1, TotalMission2, TotalMission3, "
                         "TotalMission4, TotalMission5) VALUES (?, ?, ?, ?, ?, ?)";
-                    std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(insertSql));
+                    std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(insertSql));
 
                     stmt->setUInt(1, accountID);
                     for (int i = 0; i < Common::Constants::totalEventMissions; ++i)
@@ -783,6 +719,7 @@ namespace Main
                     stmt->executeUpdate();
                 }
 
+                txn.commit();
                 return true;
             }
             catch (const sql::SQLException& e)
@@ -812,12 +749,6 @@ namespace Main
         {
             try
             {
-                std::string createTableQuery = R"(CREATE TABLE IF NOT EXISTS GameLogs (ID INT AUTO_INCREMENT PRIMARY KEY, LogType VARCHAR(255) NOT NULL,
-					Message TEXT NOT NULL, Severity VARCHAR(20) NOT NULL, CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP))";
-
-                std::unique_ptr<sql::Statement> stmtCreate(m_con->createStatement());
-                stmtCreate->execute(createTableQuery);
-
                 std::string insertQuery = "INSERT INTO GameLogs (LogType, Message, Severity) VALUES (?, ?, ?)";
                 std::unique_ptr<sql::PreparedStatement> stmtInsert(m_con->prepareStatement(insertQuery));
 
@@ -844,7 +775,7 @@ namespace Main
 
                 std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(queryStr));
                 stmt->setUInt(1, playerID);
-                sql::ResultSet* res(stmt->executeQuery());
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
                 if (res->next())
                 {
@@ -966,7 +897,6 @@ namespace Main
             }
         }
 
-
         std::optional<std::pair<Main::Structures::AccountInfo, std::string>> PersistentDatabase::getPlayerInfoByNickname(const std::string& nickname)
         {
             Main::Structures::AccountInfo playerInfoStructure{};
@@ -977,7 +907,7 @@ namespace Main
 
                 std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(queryStr));
                 stmt->setString(1, nickname);
-                sql::ResultSet* res(stmt->executeQuery());
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
                 if (res->next())
                 {
@@ -1004,14 +934,13 @@ namespace Main
             }
         }
 
-
         Main::Structures::MuteInfo PersistentDatabase::isMuted(std::uint32_t playerID)
         {
             try
             {
                 std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement("SELECT * FROM Users WHERE AccountID = ?"));
                 stmt->setUInt(1, playerID);
-                sql::ResultSet* res(stmt->executeQuery());
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
                 if (res->next())
                 {
@@ -1024,12 +953,7 @@ namespace Main
 
                     bool isMuted = mutedUntil > currentTimeStr;
 
-                    return Main::Structures::MuteInfo{
-                        isMuted, 
-                        muteReason, 
-                        mutedBy, 
-                        mutedUntil 
-                    };
+                    return Main::Structures::MuteInfo{isMuted, muteReason, mutedBy, mutedUntil };
                 }
                 else
                 {
@@ -1050,7 +974,7 @@ namespace Main
             {
                 std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement("SELECT * FROM Users WHERE Nickname = ?"));
                 stmt->setString(1, nickname);
-                sql::ResultSet* res(stmt->executeQuery());
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
                 if (res->next())
                 {
@@ -1063,12 +987,7 @@ namespace Main
 
                     bool isMuted = mutedUntil > currentTimeStr;
 
-                    return Main::Structures::MuteInfo{
-                        isMuted,
-                        muteReason,
-                        mutedBy,
-                        mutedUntil
-                    };
+                    return Main::Structures::MuteInfo{ isMuted, muteReason, mutedBy, mutedUntil };
                 }
                 else
                 {
@@ -1083,14 +1002,13 @@ namespace Main
             }
         }
 
-
         std::optional<Main::Structures::BanInfo> PersistentDatabase::getBanInfoByNickname(const std::string& nickname)
         {
             try
             {
                 std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement("SELECT * FROM Users WHERE Nickname = ?"));
                 stmt->setString(1, nickname);
-                sql::ResultSet* res(stmt->executeQuery());
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
                 if (res->next())
                 {
@@ -1102,11 +1020,7 @@ namespace Main
 
                     bool isBanned = suspendedUntil > currentTimeStr;
 
-                    return Main::Structures::BanInfo{
-                        isBanned,  
-                        suspensionReason,  
-                        suspendedUntil 
-                    };
+                    return Main::Structures::BanInfo{ isBanned, suspensionReason, suspendedUntil };
                 }
                 else
                 {
@@ -1129,7 +1043,7 @@ namespace Main
                 std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(selectQueryStr));
                 stmt->setString(1, nickname);  
 
-                sql::ResultSet* res(stmt->executeQuery());
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
                 if (res->next())
                 {
                     const std::string disabledUntil = res->getString("RoomCreationDisabledUntil").c_str();
@@ -1151,7 +1065,7 @@ namespace Main
             {
                 std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement("SELECT RoomCreationDisabledUntil FROM Users WHERE AccountID = ?"));
                 stmt->setUInt(1, playerID);
-                sql::ResultSet* res(stmt->executeQuery());
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
                 if (res->next())
                 {
@@ -1174,12 +1088,6 @@ namespace Main
         {
             try
             {
-                {
-                    std::string alterQuery = "ALTER TABLE Users ADD COLUMN IF NOT EXISTS VotekickDisabledUntil DATETIME NULL DEFAULT NULL";
-                    std::unique_ptr<sql::Statement> alterStmt(m_con->createStatement());
-                    alterStmt->execute(alterQuery);
-                }
-
                 std::string selectQueryStr = "SELECT VotekickDisabledUntil FROM Users WHERE Nickname = ?";
                 std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(selectQueryStr));
                 stmt->setString(1, nickname);
@@ -1203,12 +1111,6 @@ namespace Main
         {
             try
             {
-                {
-                    std::string alterQuery = "ALTER TABLE Users ADD COLUMN IF NOT EXISTS VotekickDisabledUntil DATETIME NULL DEFAULT NULL";
-                    std::unique_ptr<sql::Statement> alterStmt(m_con->createStatement());
-                    alterStmt->execute(alterQuery);
-                }
-
                 std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement("SELECT VotekickDisabledUntil FROM Users WHERE AccountID = ?"));
                 stmt->setUInt(1, playerID);
 
@@ -1274,8 +1176,8 @@ namespace Main
             }
         }
 
-        auto PersistentDatabase::getPlayerItems(std::uint32_t playerID) -> std::pair<std::vector<Main::Structures::Item>,
-            std::unordered_map<std::uint16_t, std::vector<Main::Structures::EquippedItem>>>
+        auto PersistentDatabase::getPlayerItems(std::uint32_t playerID)
+            -> std::pair<std::vector<Main::Structures::Item>, std::unordered_map<std::uint16_t, std::vector<Main::Structures::EquippedItem>>>
         {
             std::vector<Main::Structures::Item> nonEquippedItems;
             std::unordered_map<std::uint16_t, std::vector<Main::Structures::EquippedItem>> equippedItemsPerCharacter;
@@ -1284,10 +1186,12 @@ namespace Main
 
             try
             {
+                TransactionGuard tx(m_transactionalCon);
+
                 const std::string queryStr = "SELECT * FROM UserItems WHERE AccountID = ?";
-                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(queryStr));
+                std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(queryStr));
                 stmt->setUInt(1, playerID);
-                sql::ResultSet* resultSet(stmt->executeQuery());
+                std::unique_ptr<sql::ResultSet> resultSet(stmt->executeQuery());
 
                 nonEquippedItems.reserve(1000);
                 equippedItemsPerCharacter.reserve(500);
@@ -1301,7 +1205,7 @@ namespace Main
                     item.serialInfo.itemCreationDate = static_cast<__time32_t>(resultSet->getInt64("creationDate"));
 
                     item.serialInfo.itemNumber = ++itemNum;
-		    itemNumbersToUpdate.emplace_back(std::pair{ rowId, static_cast<unsigned long>(item.serialInfo.itemNumber) });
+                    itemNumbersToUpdate.emplace_back(std::pair{ rowId, static_cast<unsigned long>(item.serialInfo.itemNumber) });
 
                     const std::uint64_t itemDuration_s = static_cast<std::uint64_t>(resultSet->getInt64("ItemDuration"));
                     item.expirationDate = (itemDuration_s <= 2)
@@ -1343,41 +1247,23 @@ namespace Main
 
                                 nonEquippedItems.push_back(std::move(item));
 
-                                try
-                                {
-                                    const std::string updateQuery = "UPDATE UserItems SET IsEquipped = 0 WHERE rowid = ?";
-                                    std::unique_ptr<sql::PreparedStatement> updateStmt(m_con->prepareStatement(updateQuery));
-                                    updateStmt->setUInt64(1, rowId);
-                                    updateStmt->executeUpdate();
-                                }
-                                catch (const sql::SQLException& e)
-                                {
-                                    Utils::Logger::log("Failed to update DB for duplicate equipped item (rowid: " + std::to_string(rowId) + "): " +
-                                        std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getPlayerItems");
-                                }
+                                const std::string updateQuery = "UPDATE UserItems SET IsEquipped = 0 WHERE rowid = ?";
+                                std::unique_ptr<sql::PreparedStatement> updateStmt(m_transactionalCon->prepareStatement(updateQuery));
+                                updateStmt->setUInt64(1, rowId);
+                                updateStmt->executeUpdate();
                             }
                         }
                         else
                         {
                             Utils::Logger::log("Logic error: Player with AID " + std::to_string(playerID) +
-                                " got an equipped item that is not allowed (< 0 or > 17)! "
-                                "[NOTE: The issue is automatically being fixed, this is just a hard-warning!]",
-                                Utils::LogType::Error, "PersistentDatabase::getPlayerItems");
+                                " got an equipped item that is not allowed (< 0 or > 17)!", Utils::LogType::Error, "PersistentDatabase::getPlayerItems");
 
                             nonEquippedItems.push_back(std::move(item));
 
-                            try
-                            {
-                                const std::string updateQuery = "UPDATE UserItems SET IsEquipped = 0 WHERE rowid = ?";
-                                std::unique_ptr<sql::PreparedStatement> updateStmt(m_con->prepareStatement(updateQuery));
-                                updateStmt->setUInt64(1, rowId);
-                                updateStmt->executeUpdate();
-                            }
-                            catch (const sql::SQLException& e)
-                            {
-                                Utils::Logger::log("Failed to update DB for invalid equipped item (rowid: " + std::to_string(rowId) + "): " +
-                                    std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getPlayerItems");
-                            }
+                            const std::string updateQuery = "UPDATE UserItems SET IsEquipped = 0 WHERE rowid = ?";
+                            std::unique_ptr<sql::PreparedStatement> updateStmt(m_transactionalCon->prepareStatement(updateQuery));
+                            updateStmt->setUInt64(1, rowId);
+                            updateStmt->executeUpdate();
                         }
                     }
                     else
@@ -1389,7 +1275,7 @@ namespace Main
                 if (!itemNumbersToUpdate.empty())
                 {
                     std::string updateItemNumbersQuery = "UPDATE UserItems SET ItemNumber = ? WHERE rowid = ?";
-                    std::unique_ptr<sql::PreparedStatement> updateStmt(m_con->prepareStatement(updateItemNumbersQuery));
+                    std::unique_ptr<sql::PreparedStatement> updateStmt(m_transactionalCon->prepareStatement(updateItemNumbersQuery));
 
                     for (const auto& [rowId, itemNumber] : itemNumbersToUpdate)
                     {
@@ -1400,6 +1286,7 @@ namespace Main
                     }
                 }
 
+                tx.commit();
             }
             catch (const sql::SQLException& e)
             {
@@ -1424,9 +1311,7 @@ namespace Main
                 if (stmt->executeUpdate() == 0)
                 {
                     ::Utils::Logger::log("replaceItem: No rows affected. Possible reasons: item not found or already has the same ItemID. "
-                        "AccountID: " + std::to_string(accountID) +
-                        ", ItemNumber: " + std::to_string(itemNumber) +
-                        ", NewItemID: " + std::to_string(newItemId),
+                        "AccountID: " + std::to_string(accountID) + ", ItemNumber: " + std::to_string(itemNumber) + ", NewItemID: " + std::to_string(newItemId),
                         Utils::LogType::Warning, "PersistentDatabase::replaceItem"); 
                     return false;
                 }
@@ -1434,10 +1319,8 @@ namespace Main
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()) +
-                    " | AccountID: " + std::to_string(accountID) +
-                    ", ItemNumber: " + std::to_string(itemNumber) +
-                    ", NewItemID: " + std::to_string(newItemId),
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()) + " | AccountID: " + std::to_string(accountID) +
+                    ", ItemNumber: " + std::to_string(itemNumber) + ", NewItemID: " + std::to_string(newItemId), 
                     Utils::LogType::Error, "PersistentDatabase::replaceItem");  
                 return false;
             }
@@ -1476,17 +1359,18 @@ namespace Main
             }
         }
 
-
         bool PersistentDatabase::addPlayerItems(std::uint32_t accountID, const std::vector<Item>& items, std::uint32_t latestCharacterSelected)
         {
             try
             {
+                TransactionGuard tx(m_transactionalCon);
+
                 const std::string queryStr =
                     "INSERT INTO UserItems (AccountID, IsEquipped, CharacterID, ItemID, ItemDuration, ItemNumber, ItemOrigin, acquisitionServerId, creationDate,"
                     " durability, energy, isSealed, sealLevel, expEnhancement, mpEnhancement, IsCoupon, Stocks) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(queryStr));
+                std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(queryStr));
                 for (const auto& item : items)
                 {
                     stmt->setUInt(1, accountID);
@@ -1508,6 +1392,7 @@ namespace Main
                     stmt->setUInt(17, item.itemId.stock);
                     stmt->executeUpdate();
                 }
+                tx.commit();
                 return true;
             }
             catch (const sql::SQLException& e)
@@ -1541,10 +1426,13 @@ namespace Main
         {
             try
             {
-                const std::string prolongItemQuery =
-                    "UPDATE UserItems SET ItemDuration = ?, ItemOrigin = ?, acquisitionServerId = ? WHERE AccountID = ? AND ItemNumber = ?";
+                TransactionGuard tg(m_transactionalCon);
 
-                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(prolongItemQuery));
+                const std::string prolongItemQuery = "UPDATE UserItems SET ItemDuration = ?, ItemOrigin = ?, acquisitionServerId = ? "
+                    "WHERE AccountID = ? AND ItemNumber = ?";
+
+                std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(prolongItemQuery));
+
                 for (std::size_t i = 0; i < toProlongItems.size(); ++i)
                 {
                     const auto& itemToProlong = toProlongItems[i];
@@ -1558,9 +1446,12 @@ namespace Main
                     {
                         ::Utils::Logger::log("Failed to update item with ItemNumber: " + std::to_string(itemToProlong.serialInfo.itemNumber) +
                             " for AccountID: " + std::to_string(accountID), Utils::LogType::Warning, "PersistentDatabase::prolongItems");
-                        return;
+
+                        return; 
                     }
                 }
+
+                tg.commit(); 
             }
             catch (const sql::SQLException& e)
             {
@@ -1669,23 +1560,25 @@ namespace Main
         {
             try
             {
+                TransactionGuard tg(m_transactionalCon);
+
                 std::string checkGradeQuery = "SELECT Grade FROM Users WHERE Nickname = ?";
-                std::unique_ptr<sql::PreparedStatement> checkStmt(m_con->prepareStatement(checkGradeQuery));
+                std::unique_ptr<sql::PreparedStatement> checkStmt(m_transactionalCon->prepareStatement(checkGradeQuery));
                 checkStmt->setString(1, nickname);
 
-                sql::ResultSet* res(checkStmt->executeQuery());
+                std::unique_ptr<sql::ResultSet> res(checkStmt->executeQuery());
                 if (!res->next())
                 {
                     return false;
                 }
 
                 if (res->getInt(1) >= static_cast<int>(executorGrade))
-                { 
+                {
                     return false;
                 }
 
                 std::string updateQuery = "UPDATE Users SET SuspendedUntil = ?, SuspensionReason = ? WHERE Nickname = ?";
-                std::unique_ptr<sql::PreparedStatement> updateStmt(m_con->prepareStatement(updateQuery));
+                std::unique_ptr<sql::PreparedStatement> updateStmt(m_transactionalCon->prepareStatement(updateQuery));
                 updateStmt->setString(1, until);
                 updateStmt->setString(2, reason);
                 updateStmt->setString(3, nickname);
@@ -1695,6 +1588,8 @@ namespace Main
                     ::Utils::Logger::log("Error executing query: " + updateQuery, Utils::LogType::Warning, "PersistentDatabase::updateSuspension");
                     return false;
                 }
+
+                tg.commit();
             }
             catch (const sql::SQLException& e)
             {
@@ -1734,7 +1629,7 @@ namespace Main
                 std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(queryStr));
 
                 stmt->setUInt(1, accountId);
-                sql::ResultSet* res(stmt->executeQuery());
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
                 if (res->next())
                 {
@@ -1758,7 +1653,7 @@ namespace Main
             {
                 std::string queryStr = "SELECT Date FROM " + tableName + " ORDER BY Date DESC LIMIT 1";
                 std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(queryStr));
-                sql::ResultSet* res(stmt->executeQuery());
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
                 if (res->next())
                 {
@@ -1797,36 +1692,36 @@ namespace Main
 
             try
             {
+                TransactionGuard tg(m_transactionalCon);
+
                 std::string countQueryStr = "SELECT COUNT(*) FROM " + tableName;
-                std::unique_ptr<sql::PreparedStatement> countStmt(m_con->prepareStatement(countQueryStr));
-                sql::ResultSet* countRes(countStmt->executeQuery());
+                std::unique_ptr<sql::PreparedStatement> countStmt(m_transactionalCon->prepareStatement(countQueryStr));
+                std::unique_ptr<sql::ResultSet> countRes(countStmt->executeQuery());
 
                 if (countRes->next() && countRes->getInt(1) > 0)
                 {
                     std::string deleteQueryStr = "DELETE FROM " + tableName;
-                    std::unique_ptr<sql::PreparedStatement> deleteStmt(m_con->prepareStatement(deleteQueryStr));
-
+                    std::unique_ptr<sql::PreparedStatement> deleteStmt(m_transactionalCon->prepareStatement(deleteQueryStr));
                     if (deleteStmt->executeUpdate() == 0)
                     {
-                        ::Utils::Logger::log("Delete failed", Utils::LogType::Warning, "PersistentDatabase::updateRewards");
                         return;
                     }
                 }
 
                 std::string insertQueryStr = "INSERT INTO " + tableName + " (ItemID, Date) VALUES (?, ?)";
-                std::unique_ptr<sql::PreparedStatement> insertStmt(m_con->prepareStatement(insertQueryStr));
+                std::unique_ptr<sql::PreparedStatement> insertStmt(m_transactionalCon->prepareStatement(insertQueryStr));
 
                 for (const auto& item : items)
                 {
                     insertStmt->setUInt(1, item);
                     insertStmt->setString(2, today);
-
                     if (insertStmt->executeUpdate() == 0)
                     {
-                        ::Utils::Logger::log("Insert failed", Utils::LogType::Warning, "PersistentDatabase::updateRewards");
                         return;
                     }
                 }
+
+                tg.commit();
             }
             catch (const sql::SQLException& e)
             {
@@ -1909,8 +1804,10 @@ namespace Main
         {
             try
             {
+                TransactionGuard tg(m_transactionalCon);
+
                 std::string updateQueryStr = "UPDATE UserItems SET Durability = ? WHERE AccountID = ? AND ItemNumber = ? AND ItemDuration = 0";
-                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(updateQueryStr));
+                std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(updateQueryStr));
 
                 for (const auto& currentEquippedItem : equippedItems)
                 {
@@ -1930,10 +1827,12 @@ namespace Main
                     stmt->setUInt(3, currentEquippedItem.second);
                     stmt->executeUpdate();
                 }
+
+                tg.commit();
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log(std::string("SQL Error: ") + e.what(), Utils::LogType::Error,"PersistentDatabase::reduceDurability");
+                ::Utils::Logger::log(std::string("SQL Error: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::reduceDurability");
             }
         }
 
@@ -2015,31 +1914,33 @@ namespace Main
             }
         }
 
-        bool PersistentDatabase::updateMute(const std::string& nickname, const std::string& until, const std::string& reason, const std::string& mutedBy,
+        bool PersistentDatabase::updateMute(const std::string& nickname, const std::string& until,
+            const std::string& reason, const std::string& mutedBy,
             std::uint32_t executorGrade)
         {
             try
             {
-                std::string checkGradeQuery = "SELECT Grade FROM Users WHERE Nickname = ?";
-                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(checkGradeQuery));
-                stmt->setString(1, nickname);
+                TransactionGuard tg(m_transactionalCon);
 
-                sql::ResultSet* resultSet(stmt->executeQuery());
-                if (resultSet->next())
+                std::string checkGradeQuery = "SELECT Grade FROM Users WHERE Nickname = ?";
+                std::unique_ptr<sql::PreparedStatement> checkStmt(m_transactionalCon->prepareStatement(checkGradeQuery));
+                checkStmt->setString(1, nickname);
+
+                std::unique_ptr<sql::ResultSet> resultSet(checkStmt->executeQuery());  
+
+                if (!resultSet->next())
                 {
-                    const int targetPlayerGrade = resultSet->getInt("Grade");
-                    if (targetPlayerGrade >= executorGrade)
-                    {
-                        return false;
-                    }
+                    return false; 
                 }
-                else
+
+                const int targetPlayerGrade = resultSet->getInt("Grade");
+                if (targetPlayerGrade >= executorGrade)
                 {
-                    return false;
+                    return false;  
                 }
 
                 std::string updateQuery = "UPDATE Users SET MutedUntil = ?, MuteReason = ?, MutedBy = ? WHERE Nickname = ?";
-                std::unique_ptr<sql::PreparedStatement> updateStmt(m_con->prepareStatement(updateQuery));
+                std::unique_ptr<sql::PreparedStatement> updateStmt(m_transactionalCon->prepareStatement(updateQuery));
                 updateStmt->setString(1, until);
                 updateStmt->setString(2, reason);
                 updateStmt->setString(3, mutedBy);
@@ -2047,15 +1948,17 @@ namespace Main
 
                 if (updateStmt->executeUpdate() == 0)
                 {
-                    ::Utils::Logger::log("Update failed.", Utils::LogType::Warning, "PersistentDatabase::updateMute");
+                    ::Utils::Logger::log("No rows updated in updateMute", Utils::LogType::Warning, "PersistentDatabase::updateMute");
                     return false;
                 }
 
+                tg.commit();
                 return true;
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateMute");
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),
+                    Utils::LogType::Error, "PersistentDatabase::updateMute");
                 return false;
             }
         }
@@ -2064,12 +1967,6 @@ namespace Main
         {
             try
             {
-                {
-                    std::string alterQuery = "ALTER TABLE Users ADD COLUMN IF NOT EXISTS VotekickDisabledUntil DATETIME NULL DEFAULT NULL";
-                    std::unique_ptr<sql::Statement> alterStmt(m_con->createStatement());
-                    alterStmt->execute(alterQuery);
-                }
-
                 std::string updateQuery = "UPDATE Users SET VotekickDisabledUntil = ? WHERE Nickname = ?";
                 std::unique_ptr<sql::PreparedStatement> updateStmt(m_con->prepareStatement(updateQuery));
                 updateStmt->setString(1, until);
@@ -2094,14 +1991,10 @@ namespace Main
         {
             try
             {
-                {
-                    std::string alterQuery = "ALTER TABLE Users ADD COLUMN IF NOT EXISTS VotekickDisabledUntil DATETIME NULL DEFAULT NULL";
-                    std::unique_ptr<sql::Statement> alterStmt(m_con->createStatement());
-                    alterStmt->execute(alterQuery);
-                }
+                TransactionGuard tg(m_transactionalCon);
 
                 std::string selectQueryStr = "SELECT AccountID FROM Users WHERE Nickname = ?";
-                std::unique_ptr<sql::PreparedStatement> selectStmt(m_con->prepareStatement(selectQueryStr));
+                std::unique_ptr<sql::PreparedStatement> selectStmt(m_transactionalCon->prepareStatement(selectQueryStr));
                 selectStmt->setString(1, nickname);
 
                 std::unique_ptr<sql::ResultSet> resultSet(selectStmt->executeQuery());
@@ -2112,13 +2005,15 @@ namespace Main
 
                 const std::uint32_t accountID = resultSet->getUInt("AccountID");
                 std::string updateQueryStr = "UPDATE Users SET VotekickDisabledUntil = 0 WHERE AccountID = ?";
-                std::unique_ptr<sql::PreparedStatement> updateStmt(m_con->prepareStatement(updateQueryStr));
+                std::unique_ptr<sql::PreparedStatement> updateStmt(m_transactionalCon->prepareStatement(updateQueryStr));
                 updateStmt->setUInt(1, accountID);
 
                 if (updateStmt->executeUpdate() == 0)
                 {
                     return false;
                 }
+
+                tg.commit();
                 return true;
             }
             catch (const sql::SQLException& e)
@@ -2127,7 +2022,6 @@ namespace Main
                 return false;
             }
         }
-
 
         bool PersistentDatabase::updateRoomCreationDisabledUntil(const std::string& nickname, const std::string& until)
         {
@@ -2157,11 +2051,13 @@ namespace Main
         {
             try
             {
+                TransactionGuard tg(m_transactionalCon);
+
                 std::string selectQueryStr = "SELECT AccountID FROM Users WHERE Nickname = ?";
-                std::unique_ptr<sql::PreparedStatement> selectStmt(m_con->prepareStatement(selectQueryStr));
+                std::unique_ptr<sql::PreparedStatement> selectStmt(m_transactionalCon->prepareStatement(selectQueryStr));
                 selectStmt->setString(1, nickname);
 
-                sql::ResultSet* resultSet(selectStmt->executeQuery());
+                std::unique_ptr<sql::ResultSet> resultSet(selectStmt->executeQuery());
                 if (!resultSet->next())
                 {
                     return false;
@@ -2169,13 +2065,15 @@ namespace Main
 
                 const std::uint32_t accountID = resultSet->getUInt("AccountID");
                 std::string updateQueryStr = "UPDATE Users SET RoomCreationDisabledUntil = 0 WHERE AccountID = ?";
-                std::unique_ptr<sql::PreparedStatement> updateStmt(m_con->prepareStatement(updateQueryStr));
+                std::unique_ptr<sql::PreparedStatement> updateStmt(m_transactionalCon->prepareStatement(updateQueryStr));
                 updateStmt->setUInt(1, accountID);
 
                 if (updateStmt->executeUpdate() == 0)
                 {
                     return false;
                 }
+
+                tg.commit();
                 return true;
             }
             catch (const sql::SQLException& e)
@@ -2189,11 +2087,13 @@ namespace Main
         {
             try
             {
+                TransactionGuard tg(m_transactionalCon);
+
                 std::string selectQueryStr = "SELECT AccountID FROM Users WHERE Nickname = ?";
-                std::unique_ptr<sql::PreparedStatement> selectStmt(m_con->prepareStatement(selectQueryStr));
+                std::unique_ptr<sql::PreparedStatement> selectStmt(m_transactionalCon->prepareStatement(selectQueryStr));
                 selectStmt->setString(1, nickname);
 
-                sql::ResultSet* resultSet(selectStmt->executeQuery());
+                std::unique_ptr<sql::ResultSet> resultSet(selectStmt->executeQuery());
                 if (!resultSet->next())
                 {
                     return false;
@@ -2201,13 +2101,15 @@ namespace Main
 
                 const std::uint32_t accountID = resultSet->getUInt("AccountID");
                 std::string updateQueryStr = "UPDATE Users SET MutedUntil = '1970-01-01 00:00:00' WHERE AccountID = ?";
-                std::unique_ptr<sql::PreparedStatement> updateStmt(m_con->prepareStatement(updateQueryStr));
+                std::unique_ptr<sql::PreparedStatement> updateStmt(m_transactionalCon->prepareStatement(updateQueryStr));
                 updateStmt->setUInt(1, accountID);
 
                 if (updateStmt->executeUpdate() == 0)
                 {
                     return false;
                 }
+
+                tg.commit();
                 return true;
             }
             catch (const sql::SQLException& e)
@@ -2290,30 +2192,30 @@ namespace Main
         {
             try
             {
-                std::string queryStr1 = "UPDATE UserItems SET IsEquipped = 1, CharacterID = ? WHERE AccountID = ? AND ItemNumber = ?";
-                std::unique_ptr<sql::PreparedStatement> stmt1(m_con->prepareStatement(queryStr1));
+                TransactionGuard tg(m_transactionalCon);
 
+                std::string queryStr1 = "UPDATE UserItems SET IsEquipped = 1, CharacterID = ? WHERE AccountID = ? AND ItemNumber = ?";
+                std::unique_ptr<sql::PreparedStatement> stmt1(m_transactionalCon->prepareStatement(queryStr1));
                 stmt1->setUInt(1, characterId);
                 stmt1->setUInt(2, accountID);
                 stmt1->setUInt64(3, toEquipItemNumber);
 
                 std::string queryStr2 = "UPDATE UserItems SET IsEquipped = 0, CharacterID = 0 WHERE AccountID = ? AND ItemNumber = ?";
-                std::unique_ptr<sql::PreparedStatement> stmt2(m_con->prepareStatement(queryStr2));
-
+                std::unique_ptr<sql::PreparedStatement> stmt2(m_transactionalCon->prepareStatement(queryStr2));
                 stmt2->setUInt(1, accountID);
                 stmt2->setUInt64(2, toUnequipItemNumber);
 
                 if (stmt1->executeUpdate() == 0)
                 {
-                    ::Utils::Logger::log("Update for equipped item failed.", Utils::LogType::Warning, "PersistentDatabase::swapItems");
                     return;
                 }
 
                 if (stmt2->executeUpdate() == 0)
                 {
-                    ::Utils::Logger::log("Update for unequipped item failed.", Utils::LogType::Warning, "PersistentDatabase::swapItems");
                     return;
                 }
+
+                tg.commit();
             }
             catch (const sql::SQLException& e)
             {
@@ -2325,14 +2227,15 @@ namespace Main
         {
             try
             {
+                TransactionGuard tg(m_transactionalCon);
+
                 const std::string insertQuery = "INSERT IGNORE INTO Friendlist (AccountID, TargetAccountID) VALUES (?, ?)";
-                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(insertQuery));
+                std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(insertQuery));
 
                 stmt->setUInt(1, accountID);
                 stmt->setUInt(2, targetAccountId);
                 if (stmt->executeUpdate() == 0)
                 {
-                    ::Utils::Logger::log("MariaDB error: Insert failed for first pair.", Utils::LogType::Warning, "PersistentDatabase::addFriend");
                     return;
                 }
 
@@ -2340,9 +2243,10 @@ namespace Main
                 stmt->setUInt(2, accountID);
                 if (stmt->executeUpdate() == 0)
                 {
-                    ::Utils::Logger::log("MariaDB error: Insert failed for second pair.", Utils::LogType::Warning, "PersistentDatabase::addFriend");
                     return;
                 }
+
+                tg.commit();
             }
             catch (const sql::SQLException& e)
             {
@@ -2354,29 +2258,24 @@ namespace Main
         {
             try
             {
-                const std::string resetKills = "UPDATE Users SET Kills = 0 WHERE AccountID = ?";
-                const std::string resetDeaths = "UPDATE Users SET Deaths = 0 WHERE AccountID = ?";
+                const std::string updateQuery = "UPDATE Users SET Kills = 0, Deaths = 0 WHERE AccountID = ?";
+                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(updateQuery));
+                stmt->setUInt(1, accountID);
 
-                std::unique_ptr<sql::PreparedStatement> stmtKills(m_con->prepareStatement(resetKills));
-                std::unique_ptr<sql::PreparedStatement> stmtDeaths(m_con->prepareStatement(resetDeaths));
+                bool success = stmt->executeUpdate() > 0;
 
-                stmtKills->setUInt(1, accountID);
-                stmtDeaths->setUInt(1, accountID);
-
-                const int killsResult = stmtKills->executeUpdate();
-                const int deathsResult = stmtDeaths->executeUpdate();
-
-                if (killsResult == 0 || deathsResult == 0)
+                if (!success)
                 {
-                    ::Utils::Logger::log("MariaDB error: no rows affected", Utils::LogType::Warning, "PersistentDatabase::resetKillDeath");
-                    return false;
+                    ::Utils::Logger::log("Failed to reset kills/deaths for account: " + std::to_string(accountID),
+                        Utils::LogType::Warning, "PersistentDatabase::resetKillDeath");
                 }
 
-                return true;
+                return success;
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::resetKillDeath");
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),
+                    Utils::LogType::Error, "PersistentDatabase::resetKillDeath");
                 return false;
             }
         }
@@ -2385,33 +2284,22 @@ namespace Main
         {
             try
             {
-                const std::string resetWins = "UPDATE Users SET Wins = 0 WHERE AccountID = ?";
-                const std::string resetLosses = "UPDATE Users SET Loses = 0 WHERE AccountID = ?";
-                const std::string resetDraws = "UPDATE Users SET Draws = 0 WHERE AccountID = ?";
+                const std::string resetQuery = "UPDATE Users SET Wins = 0, Loses = 0, Draws = 0 WHERE AccountID = ?";
+                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(resetQuery));
+                stmt->setUInt(1, accountID);
 
-                std::unique_ptr<sql::PreparedStatement> stmtWins(m_con->prepareStatement(resetWins));
-                std::unique_ptr<sql::PreparedStatement> stmtLosses(m_con->prepareStatement(resetLosses));
-                std::unique_ptr<sql::PreparedStatement> stmtDraws(m_con->prepareStatement(resetDraws));
+                bool success = stmt->executeUpdate() > 0;
 
-                stmtWins->setUInt(1, accountID);
-                stmtLosses->setUInt(1, accountID);
-                stmtDraws->setUInt(1, accountID);
-
-                const int winsResult = stmtWins->executeUpdate();
-                const int lossesResult = stmtLosses->executeUpdate();
-                const int drawsResult = stmtDraws->executeUpdate();
-
-                if (winsResult == 0 || lossesResult == 0 || drawsResult == 0)
+                if (!success)
                 {
-                    ::Utils::Logger::log("MariaDB error: no rows affected", Utils::LogType::Warning, "PersistentDatabase::resetRecord");
-                    return false;
+                    ::Utils::Logger::log("Failed to reset record for account: " + std::to_string(accountID),Utils::LogType::Warning, "PersistentDatabase::resetRecord");
                 }
 
-                return true;
+                return success;
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::resetRecord");
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error, "PersistentDatabase::resetRecord");
                 return false;
             }
         }
@@ -2425,18 +2313,19 @@ namespace Main
         {
             try
             {
+                TransactionGuard tg(m_transactionalCon);
+
                 const std::string getBattery = "SELECT Battery FROM Users WHERE AccountID = ?";
                 const std::string updateBattery = "UPDATE Users SET Battery = ? WHERE AccountID = ?";
 
-                std::unique_ptr<sql::PreparedStatement> stmtGetBattery(m_con->prepareStatement(getBattery));
-                std::unique_ptr<sql::PreparedStatement> stmtUpdateBattery(m_con->prepareStatement(updateBattery));
+                std::unique_ptr<sql::PreparedStatement> stmtGetBattery(m_transactionalCon->prepareStatement(getBattery));
+                std::unique_ptr<sql::PreparedStatement> stmtUpdateBattery(m_transactionalCon->prepareStatement(updateBattery));
 
                 stmtGetBattery->setUInt(1, accountID);
-                sql::ResultSet* resGetBattery(stmtGetBattery->executeQuery());
+                std::unique_ptr<sql::ResultSet> resGetBattery(stmtGetBattery->executeQuery());
 
                 if (!resGetBattery->next())
                 {
-                    ::Utils::Logger::log("Error: Account not found", Utils::LogType::Warning, "PersistentDatabase::batteryRecharge");
                     return false;
                 }
 
@@ -2444,13 +2333,12 @@ namespace Main
                 stmtUpdateBattery->setUInt(1, currentBattery + quantity);
                 stmtUpdateBattery->setUInt(2, accountID);
 
-                const int updateResult = stmtUpdateBattery->executeUpdate();
-                if (updateResult == 0)
+                if (stmtUpdateBattery->executeUpdate() == 0)
                 {
-                    ::Utils::Logger::log("Error executing update: no rows affected", Utils::LogType::Warning, "PersistentDatabase::batteryRecharge");
                     return false;
                 }
 
+                tg.commit();
                 return true;
             }
             catch (const sql::SQLException& e)
@@ -2464,18 +2352,19 @@ namespace Main
         {
             try
             {
+                TransactionGuard tg(m_transactionalCon);
+
                 const std::string getMaxBattery = "SELECT MaxBattery FROM Users WHERE AccountID = ?";
                 const std::string updateMaxBattery = "UPDATE Users SET MaxBattery = ? WHERE AccountID = ?";
 
-                std::unique_ptr<sql::PreparedStatement> stmtGetMaxBattery(m_con->prepareStatement(getMaxBattery));
-                std::unique_ptr<sql::PreparedStatement> stmtUpdateMaxBattery(m_con->prepareStatement(updateMaxBattery));
+                std::unique_ptr<sql::PreparedStatement> stmtGetMaxBattery(m_transactionalCon->prepareStatement(getMaxBattery));
+                std::unique_ptr<sql::PreparedStatement> stmtUpdateMaxBattery(m_transactionalCon->prepareStatement(updateMaxBattery));
 
                 stmtGetMaxBattery->setUInt(1, accountID);
-                sql::ResultSet* resGetMaxBattery(stmtGetMaxBattery->executeQuery());
+                std::unique_ptr<sql::ResultSet> resGetMaxBattery(stmtGetMaxBattery->executeQuery());
 
                 if (!resGetMaxBattery->next())
                 {
-                    ::Utils::Logger::log("Error: Account not found", Utils::LogType::Warning, "PersistentDatabase::batteryExpansion");
                     return false;
                 }
 
@@ -2489,13 +2378,12 @@ namespace Main
                 stmtUpdateMaxBattery->setUInt(1, newMaxBattery);
                 stmtUpdateMaxBattery->setUInt(2, accountID);
 
-                const int updateResult = stmtUpdateMaxBattery->executeUpdate();
-                if (updateResult == 0)
+                if (stmtUpdateMaxBattery->executeUpdate() == 0)
                 {
-                    ::Utils::Logger::log("Error executing update: no rows affected", Utils::LogType::Warning, "PersistentDatabase::batteryExpansion");
                     return false;
                 }
 
+                tg.commit();
                 return true;
             }
             catch (const sql::SQLException& e)
@@ -2509,18 +2397,19 @@ namespace Main
         {
             try
             {
+                TransactionGuard tg(m_transactionalCon);
+
                 const std::string getMaxInventory = "SELECT MaxInventory FROM Users WHERE AccountID = ?";
                 const std::string updateMaxInventory = "UPDATE Users SET MaxInventory = ? WHERE AccountID = ?";
 
-                std::unique_ptr<sql::PreparedStatement> stmtGetMaxInventory(m_con->prepareStatement(getMaxInventory));
-                std::unique_ptr<sql::PreparedStatement> stmtUpdateMaxInventory(m_con->prepareStatement(updateMaxInventory));
+                std::unique_ptr<sql::PreparedStatement> stmtGetMaxInventory(m_transactionalCon->prepareStatement(getMaxInventory));
+                std::unique_ptr<sql::PreparedStatement> stmtUpdateMaxInventory(m_transactionalCon->prepareStatement(updateMaxInventory));
 
                 stmtGetMaxInventory->setUInt(1, accountID);
                 std::unique_ptr<sql::ResultSet> resGetMaxInventory(stmtGetMaxInventory->executeQuery());
 
                 if (!resGetMaxInventory->next())
                 {
-                    ::Utils::Logger::log("Error: Account not found", Utils::LogType::Warning, "PersistentDatabase::inventoryExpansion");
                     return false;
                 }
 
@@ -2535,13 +2424,12 @@ namespace Main
                 stmtUpdateMaxInventory->setUInt(1, newMaxInventory);
                 stmtUpdateMaxInventory->setUInt(2, accountID);
 
-                const int updateResult = stmtUpdateMaxInventory->executeUpdate();
-                if (updateResult == 0)
+                if (stmtUpdateMaxInventory->executeUpdate() == 0)
                 {
-                    ::Utils::Logger::log("Error executing update: no rows affected", Utils::LogType::Warning, "PersistentDatabase::inventoryExpansion");
                     return false;
                 }
 
+                tg.commit();
                 return true;
             }
             catch (const sql::SQLException& e)
@@ -2588,7 +2476,7 @@ namespace Main
 
                 std::unique_ptr<sql::PreparedStatement> stmtSelectFriends(m_con->prepareStatement(selectFriendsQuery));
                 stmtSelectFriends->setUInt(1, accountID);
-                sql::ResultSet* res(stmtSelectFriends->executeQuery());
+                std::unique_ptr<sql::ResultSet> res(stmtSelectFriends->executeQuery());
 
                 Main::Structures::Friend ffriend;
                 while (res->next())
@@ -2625,7 +2513,7 @@ namespace Main
                 std::unique_ptr<sql::PreparedStatement> stmtSelectBlockedPlayers(m_con->prepareStatement(selectBlockedPlayersQuery));
                 stmtSelectBlockedPlayers->setUInt(1, accountID);
 
-                sql::ResultSet* res(stmtSelectBlockedPlayers->executeQuery());
+                std::unique_ptr<sql::ResultSet> res(stmtSelectBlockedPlayers->executeQuery());
 
                 Main::Structures::BlockedPlayer blockedPlayer;
                 while (res->next())
@@ -2673,9 +2561,12 @@ namespace Main
         {
             try
             {
-                std::unique_ptr<sql::PreparedStatement> stmtFind(m_con->prepareStatement("SELECT AccountID, Grade FROM Users WHERE Nickname = ?"));
+                TransactionGuard tg(m_transactionalCon);
+
+                std::unique_ptr<sql::PreparedStatement> stmtFind(m_transactionalCon->prepareStatement(
+                    "SELECT AccountID, Grade FROM Users WHERE Nickname = ?"));
                 stmtFind->setString(1, targetNickname);
-                sql::ResultSet* resFind(stmtFind->executeQuery());
+                std::unique_ptr<sql::ResultSet> resFind(stmtFind->executeQuery());
 
                 if (!resFind->next())
                     return std::nullopt;
@@ -2683,16 +2574,18 @@ namespace Main
                 const std::uint32_t targetAccountId = resFind->getUInt("AccountID");
                 const std::uint32_t targetGrade = resFind->getUInt("Grade");
 
-                if (targetGrade >= 3) // mod
+                if (targetGrade >= 3)
                     return std::nullopt;
 
-                std::unique_ptr<sql::PreparedStatement> stmtBlockPlayer(m_con->prepareStatement("INSERT INTO BlockedPlayers (AccountID, TargetAccountID) VALUES (?, ?)"));
+                std::unique_ptr<sql::PreparedStatement> stmtBlockPlayer(m_transactionalCon->prepareStatement(
+                    "INSERT INTO BlockedPlayers (AccountID, TargetAccountID) VALUES (?, ?)"));
                 stmtBlockPlayer->setUInt(1, accountID);
                 stmtBlockPlayer->setUInt(2, targetAccountId);
 
                 if (stmtBlockPlayer->executeUpdate() == 0)
                     return std::nullopt;
 
+                tg.commit();
                 return targetAccountId;
             }
             catch (const sql::SQLException& e)
@@ -2701,7 +2594,6 @@ namespace Main
                 return std::nullopt;
             }
         }
-
 
         void PersistentDatabase::unblockPlayer(std::uint32_t accountID, std::uint32_t targetAccountId)
         {
@@ -2723,73 +2615,68 @@ namespace Main
             }
         }
 
-        Main::Enums::AddFriendServerExtra PersistentDatabase::addPendingFriendRequest(std::uint32_t aid, const char* targetName)
+        Main::Enums::AddFriendServerExtra PersistentDatabase::addPendingFriendRequest(
+            std::uint32_t aid,
+            const char* targetName)
         {
             try
             {
+                TransactionGuard tx(m_transactionalCon);
+
                 std::uint32_t targetAid = 0;
 
-                std::unique_ptr<sql::PreparedStatement> stmtFindPlayerByAccountId(m_con->prepareStatement("SELECT AccountID FROM Users WHERE Nickname = ?"));
-                stmtFindPlayerByAccountId->setString(1, targetName);
-                sql::ResultSet* resFindPlayerByAccountId(stmtFindPlayerByAccountId->executeQuery());
+                std::unique_ptr<sql::PreparedStatement> stmtFindPlayer(
+                    m_transactionalCon->prepareStatement("SELECT AccountID FROM Users WHERE Nickname = ? FOR UPDATE"));
+                stmtFindPlayer->setString(1, targetName);
 
-                if (resFindPlayerByAccountId->next())
-                {
-                    targetAid = static_cast<std::uint32_t>(resFindPlayerByAccountId->getUInt("AccountID"));
-                }
-                else
-                {
+                std::unique_ptr<sql::ResultSet> resFindPlayer(stmtFindPlayer->executeQuery());
+
+                if (!resFindPlayer->next())
                     return Main::Enums::AddFriendServerExtra::TARGET_NOT_FOUND;
-                }
+
+                targetAid = static_cast<std::uint32_t>(
+                    resFindPlayer->getUInt("AccountID"));
 
                 if (targetAid == aid)
-                {
                     return Main::Enums::AddFriendServerExtra::TARGET_NOT_FOUND;
-                }
 
-                std::unique_ptr<sql::PreparedStatement> stmtFindTotalFriends(
-                    m_con->prepareStatement("SELECT COUNT(*) AS FriendCount FROM Friendlist WHERE AccountID = ?"));
-                stmtFindTotalFriends->setUInt(1, targetAid);
-                sql::ResultSet* resFindTotalFriends(stmtFindTotalFriends->executeQuery());
+                std::unique_ptr<sql::PreparedStatement> stmtFriendCount(
+                    m_transactionalCon->prepareStatement("SELECT COUNT(*) AS FriendCount FROM Friendlist WHERE AccountID = ? FOR UPDATE"));
+                stmtFriendCount->setUInt(1, targetAid);
 
-                if (resFindTotalFriends->next())
-                {
-                    const std::size_t totalCount = resFindTotalFriends->getUInt("FriendCount");
-                    if (totalCount >= Common::Constants::maxFriends)
-                    {
-                        return Main::Enums::AddFriendServerExtra::TARGET_OR_SENDER_FRIEND_LIST_FULL;
-                    }
-                }
-                else
-                {
+                std::unique_ptr<sql::ResultSet> resFriendCount(stmtFriendCount->executeQuery());
+
+                if (!resFriendCount->next())
                     return Main::Enums::AddFriendServerExtra::DB_ERROR;
-                }
 
-                std::unique_ptr<sql::PreparedStatement> stmtHasBlockedUs(m_con->prepareStatement("SELECT 1 FROM BlockedPlayers WHERE AccountID = ? AND TargetAccountID = ?"));
-                stmtHasBlockedUs->setUInt(1, targetAid);
-                stmtHasBlockedUs->setUInt(2, aid);
-                sql::ResultSet* resHasBlockedUs(stmtHasBlockedUs->executeQuery());
+                if (resFriendCount->getUInt("FriendCount") >= Common::Constants::maxFriends)
+                    return Main::Enums::AddFriendServerExtra::TARGET_OR_SENDER_FRIEND_LIST_FULL;
 
-                if (resHasBlockedUs->next())
-                {
+                std::unique_ptr<sql::PreparedStatement> stmtBlocked(
+                    m_transactionalCon->prepareStatement("SELECT 1 FROM BlockedPlayers WHERE AccountID = ? AND TargetAccountID = ? FOR UPDATE"));
+                stmtBlocked->setUInt(1, targetAid);
+                stmtBlocked->setUInt(2, aid);
+
+                std::unique_ptr<sql::ResultSet> resBlocked(stmtBlocked->executeQuery());
+
+                if (resBlocked->next())
                     return Main::Enums::AddFriendServerExtra::RECEIVER_BLOCKED_SENDER;
-                }
 
-                std::unique_ptr<sql::PreparedStatement> stmtInsertPendingRequest(m_con->prepareStatement("INSERT INTO PendingFriendRequests (AccountID, TargetAccountID) VALUES(?, ?)"));
-                stmtInsertPendingRequest->setUInt(1, targetAid);
-                stmtInsertPendingRequest->setUInt(2, aid);
+                std::unique_ptr<sql::PreparedStatement> stmtInsert(
+                    m_transactionalCon->prepareStatement("INSERT INTO PendingFriendRequests (AccountID, TargetAccountID) VALUES (?, ?)"));
+                stmtInsert->setUInt(1, targetAid);
+                stmtInsert->setUInt(2, aid);
 
-                if (stmtInsertPendingRequest->executeUpdate() == 0)
-                {
-                    ::Utils::Logger::log("Error executing query", Utils::LogType::Warning, "PersistentDatabase::addPendingFriendRequest");
+                if (stmtInsert->executeUpdate() == 0)
                     return Main::Enums::AddFriendServerExtra::DB_ERROR;
-                }
 
+                tx.commit();
                 return Main::Enums::AddFriendServerExtra::REQUEST_SENT;
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::addPendingFriendRequest");
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::addPendingFriendRequest");
+
                 return Main::Enums::AddFriendServerExtra::DB_ERROR;
             }
         }
@@ -2797,42 +2684,51 @@ namespace Main
         std::vector<Main::Structures::Friend> PersistentDatabase::loadPendingFriendRequests(std::uint32_t accountID)
         {
             std::vector<Main::Structures::Friend> pendingFriendRequests;
+
             try
             {
-                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement("SELECT PendingFriendRequests.*, Users.Nickname AS TargetNickname "
-                    "FROM PendingFriendRequests INNER JOIN Users ON PendingFriendRequests.TargetAccountID = Users.AccountID "
-                    "WHERE PendingFriendRequests.AccountID = ?"));
-                stmt->setUInt(1, accountID);
-                sql::ResultSet* res(stmt->executeQuery());
+                TransactionGuard tx(m_transactionalCon);
 
-                Main::Structures::Friend ffriend;
+                std::unique_ptr<sql::PreparedStatement> stmt(
+                    m_transactionalCon->prepareStatement("SELECT PendingFriendRequests.*, Users.Nickname AS TargetNickname "
+                        "FROM PendingFriendRequests INNER JOIN Users ON PendingFriendRequests.TargetAccountID = Users.AccountID "
+                        "WHERE PendingFriendRequests.AccountID = ? FOR UPDATE"));
+
+                stmt->setUInt(1, accountID);
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
+                Main::Structures::Friend ffriend{};
+
                 while (res->next())
                 {
-                    std::memcpy(ffriend.targetNickname, res->getString("TargetNickname").c_str(), 16);
+                    std::memcpy(ffriend.targetNickname,res->getString("TargetNickname").c_str(),16);
+
                     ffriend.targetAccountId = res->getUInt("TargetAccountID");
+
                     pendingFriendRequests.push_back(ffriend);
                 }
 
                 if (!pendingFriendRequests.empty())
                 {
-                    std::unique_ptr<sql::PreparedStatement> stmtRemove(m_con->prepareStatement("DELETE FROM PendingFriendRequests WHERE AccountID = ?"));
+                    std::unique_ptr<sql::PreparedStatement> stmtRemove(m_transactionalCon->prepareStatement("DELETE FROM PendingFriendRequests WHERE AccountID = ?"));
+
                     stmtRemove->setUInt(1, accountID);
                     stmtRemove->executeUpdate();
                 }
+
+                tx.commit();
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::loadPendingFriendRequests");
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::loadPendingFriendRequests");
             }
 
             return pendingFriendRequests;
         }
 
-
         std::vector<Main::Structures::SingleModeEvent> PersistentDatabase::getEventsModeList()
         {
             std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement("SELECT * FROM EventsModes"));
-            sql::ResultSet* res(stmt->executeQuery());
+            std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
             std::vector<Main::Structures::SingleModeEvent> events;
             Main::Structures::SingleModeEvent singleEvent;
@@ -2865,7 +2761,7 @@ namespace Main
         std::vector<Main::Structures::SingleMapEvent> PersistentDatabase::getEventsMapList()
         {
             std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement("SELECT * FROM EventsMaps"));
-            sql::ResultSet* res(stmt->executeQuery());
+            std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
             std::vector<Main::Structures::SingleMapEvent> events;
             Main::Structures::SingleMapEvent singleEvent;
@@ -2894,7 +2790,6 @@ namespace Main
 
             return events;
         }
-
 
         void PersistentDatabase::storeMailbox(const Main::Structures::Mailbox& mailbox, std::uint32_t accountId, bool isSent)
         {
@@ -2952,11 +2847,13 @@ namespace Main
         {
             try
             {
-                const std::string retrieveAccountIdQuery = "SELECT AccountID FROM Users WHERE Nickname = ?";
-                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(retrieveAccountIdQuery));
+                TransactionGuard tx(m_transactionalCon);
+
+                const std::string retrieveAccountIdQuery = "SELECT AccountID FROM Users WHERE Nickname = ? FOR UPDATE";
+                std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(retrieveAccountIdQuery));
                 stmt->setString(1, nickname);
 
-                sql::ResultSet* res(stmt->executeQuery());
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
                 if (!res->next())
                 {
@@ -2965,11 +2862,11 @@ namespace Main
                 }
                 const std::uint32_t accountId = res->getUInt("AccountID");
 
-                const std::string countGiftboxesQuery = "SELECT COUNT(*) FROM Giftbox WHERE accountId = ?";
-                std::unique_ptr<sql::PreparedStatement> countStmt(m_con->prepareStatement(countGiftboxesQuery));
+                const std::string countGiftboxesQuery = "SELECT COUNT(*) FROM Giftbox WHERE accountId = ? FOR UPDATE";
+                std::unique_ptr<sql::PreparedStatement> countStmt(m_transactionalCon->prepareStatement(countGiftboxesQuery));
                 countStmt->setUInt(1, accountId);
 
-                sql::ResultSet* countRes(countStmt->executeQuery());
+                std::unique_ptr<sql::ResultSet> countRes(countStmt->executeQuery());
 
                 if (countRes->next())
                 {
@@ -2983,7 +2880,24 @@ namespace Main
                 Main::Structures::Giftbox giftbox{ accountId, static_cast<__time32_t>(std::time(0)), itemId, itemId, itemId };
                 std::memcpy(giftbox.nickname, Common::Constants::teamString.c_str(), Common::Constants::teamString.size());
                 std::memcpy(giftbox.message, giftDescription.c_str(), giftDescription.size());
-                return storeGiftbox(giftbox, accountId);
+
+                const std::string storeGiftboxQuery = "INSERT INTO Giftbox (accountId, itemId, timestamp, sender, message) VALUES (?, ?, ?, ?, ?)";
+                std::unique_ptr<sql::PreparedStatement> insertStmt(m_transactionalCon->prepareStatement(storeGiftboxQuery));
+
+                insertStmt->setUInt(1, accountId);
+                insertStmt->setUInt(2, giftbox.id);
+                insertStmt->setUInt64(3, giftbox.timestamp);
+                insertStmt->setString(4, giftbox.nickname);
+                insertStmt->setString(5, giftbox.message);
+
+                if (insertStmt->executeUpdate() != 1)
+                {
+                    ::Utils::Logger::log("Error executing query: " + storeGiftboxQuery, Utils::LogType::Warning, "PersistentDatabase::storeGiftbox");
+                    return false;
+                }
+
+                tx.commit();
+                return true;
             }
             catch (const sql::SQLException& e)
             {
@@ -2991,56 +2905,58 @@ namespace Main
                 return false;
             }
         }
-
+       
         Main::Enums::MailboxExtra PersistentDatabase::storeOfflineMailbox(const Main::Structures::Mailbox& mailbox, const char* senderNickname)
         {
             try
             {
+                TransactionGuard tx(m_transactionalCon);
+
                 std::uint32_t accountId = 0;
-                const std::string retrieveAccountIdQuery = "SELECT AccountID FROM Users WHERE Nickname = ?";
-                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(retrieveAccountIdQuery));
+                const std::string retrieveAccountIdQuery = "SELECT AccountID FROM Users WHERE Nickname = ? FOR UPDATE";
+                std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(retrieveAccountIdQuery));
                 stmt->setString(1, mailbox.nickname);
 
-                sql::ResultSet* res(stmt->executeQuery());
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
                 if (res->next())
                     accountId = res->getUInt("AccountID");
                 else
                     return Main::Enums::MailboxExtra::RECEIVER_NOT_FOUND;
 
-                const std::string countMailboxesQuery = "SELECT COUNT(*) FROM Mailbox WHERE accountId = ? AND sent = 0";
-                std::unique_ptr<sql::PreparedStatement> countStmt(m_con->prepareStatement(countMailboxesQuery));
+                const std::string countMailboxesQuery = "SELECT COUNT(*) FROM Mailbox WHERE accountId = ? AND sent = 0 FOR UPDATE";
+                std::unique_ptr<sql::PreparedStatement> countStmt(m_transactionalCon->prepareStatement(countMailboxesQuery));
                 countStmt->setUInt(1, accountId);
 
-                sql::ResultSet* countRes(countStmt->executeQuery());
+                std::unique_ptr<sql::ResultSet> countRes(countStmt->executeQuery());
                 if (countRes->next() && countRes->getInt(1) >= Common::Constants::maxMailbox)
                     return Main::Enums::MailboxExtra::RECEIVER_NO_SPACE_LEFT;
 
                 std::uint32_t senderAccountId = 0;
-                std::unique_ptr<sql::PreparedStatement> senderQuery(m_con->prepareStatement(retrieveAccountIdQuery));
+                std::unique_ptr<sql::PreparedStatement> senderQuery(m_transactionalCon->prepareStatement(retrieveAccountIdQuery));
                 senderQuery->setString(1, senderNickname);
 
-                sql::ResultSet* senderRes(senderQuery->executeQuery());
+                std::unique_ptr<sql::ResultSet> senderRes(senderQuery->executeQuery());
                 if (senderRes->next())
                     senderAccountId = senderRes->getUInt("AccountID");
                 else
                     return Main::Enums::MailboxExtra::MAILBOX_DB_ERROR;
 
-                const std::string blockedPlayersQuery = "SELECT 1 FROM BlockedPlayers WHERE AccountID = ? AND TargetAccountID = ?";
-                std::unique_ptr<sql::PreparedStatement> blockCheckQuery(m_con->prepareStatement(blockedPlayersQuery));
+                const std::string blockedPlayersQuery = "SELECT 1 FROM BlockedPlayers WHERE AccountID = ? AND TargetAccountID = ? FOR UPDATE";
+                std::unique_ptr<sql::PreparedStatement> blockCheckQuery(m_transactionalCon->prepareStatement(blockedPlayersQuery));
                 blockCheckQuery->setUInt(1, accountId);
                 blockCheckQuery->setUInt(2, senderAccountId);
 
-                sql::ResultSet* blockCheckRes(blockCheckQuery->executeQuery());
+                std::unique_ptr<sql::ResultSet> blockCheckRes(blockCheckQuery->executeQuery());
                 if (blockCheckRes->next())
                     return Main::Enums::MailboxExtra::MAILBOX_RECEIVER_BLOCKED_SENDER;
 
                 const std::string storeMailboxQuery =
                     "INSERT INTO Mailbox (accountId, timestamp, uniqueId, nickname, message, sent, isNew) VALUES (?, ?, ?, ?, ?, ?, ?)";
-                std::unique_ptr<sql::PreparedStatement> query(m_con->prepareStatement(storeMailboxQuery));
+                std::unique_ptr<sql::PreparedStatement> query(m_transactionalCon->prepareStatement(storeMailboxQuery));
 
                 query->setUInt(1, accountId);
-                query->setUInt64(2, mailbox.timestamp); // uniqueId (3) ignored for now
-				query->setUInt64(3, 0);
+                query->setUInt64(2, mailbox.timestamp);
+                query->setUInt64(3, 0);
                 query->setString(4, senderNickname);
                 query->setString(5, mailbox.message);
                 query->setBoolean(6, false);
@@ -3051,6 +2967,8 @@ namespace Main
                     ::Utils::Logger::log("Error executing query: " + storeMailboxQuery, Utils::LogType::Error, "PersistentDatabase::storeOfflineMailbox");
                     return Main::Enums::MailboxExtra::MAILBOX_DB_ERROR;
                 }
+
+                tx.commit();
                 return Main::Enums::MailboxExtra::MAILBOX_SENT;
             }
             catch (const sql::SQLException& e)
@@ -3070,7 +2988,7 @@ namespace Main
                 std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(selectMailboxQuery));
                 stmt->setUInt(1, accountID);
 
-                sql::ResultSet* res(stmt->executeQuery());
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
                 Main::Structures::Mailbox mailbox;
                 while (res->next())
@@ -3168,7 +3086,7 @@ namespace Main
                 stmt->setBoolean(2, true);
                 stmt->setBoolean(3, false);
 
-                sql::ResultSet* res(stmt->executeQuery());
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
                 Main::Structures::Mailbox mailbox;
                 while (res->next())
@@ -3238,17 +3156,19 @@ namespace Main
         }
 
         void PersistentDatabase::insertEnergyToItem(std::uint32_t accountID, std::uint64_t itemNumber, std::uint32_t newItemEnergy, std::uint32_t newTotalEnergy)
-        {        
+        {
             try
             {
+                TransactionGuard tx(m_transactionalCon);
+
                 const std::string setEnergyForItem = "UPDATE UserItems SET energy = ? WHERE AccountID = ? AND ItemNumber = ?";
-                std::unique_ptr<sql::PreparedStatement> stmt1(m_con->prepareStatement(setEnergyForItem));
+                std::unique_ptr<sql::PreparedStatement> stmt1(m_transactionalCon->prepareStatement(setEnergyForItem));
                 stmt1->setUInt(1, newItemEnergy);
                 stmt1->setUInt(2, accountID);
                 stmt1->setUInt64(3, itemNumber);
 
                 const std::string removeEnergyFromTotalEnergy = "UPDATE Users SET Battery = ? WHERE AccountID = ?";
-                std::unique_ptr<sql::PreparedStatement> stmt2(m_con->prepareStatement(removeEnergyFromTotalEnergy));
+                std::unique_ptr<sql::PreparedStatement> stmt2(m_transactionalCon->prepareStatement(removeEnergyFromTotalEnergy));
                 stmt2->setUInt(1, newTotalEnergy);
                 stmt2->setUInt(2, accountID);
 
@@ -3260,6 +3180,8 @@ namespace Main
 
                 Main::Structures::ItemLogInfo logInfo{ itemNumber, 0, 0, "The user added energy to this item. New item energy is " + std::to_string(newItemEnergy) };
                 insertItemLog(accountID, logInfo);
+
+                tx.commit();
             }
             catch (const sql::SQLException& e)
             {
@@ -3293,6 +3215,8 @@ namespace Main
         {
             try
             {
+                TransactionGuard tx(m_transactionalCon);
+
                 auto now = std::chrono::system_clock::now();
                 auto expirationTime = now + std::chrono::hours(hoursFromNow);
                 std::time_t expirationT = std::chrono::system_clock::to_time_t(expirationTime);
@@ -3302,18 +3226,19 @@ namespace Main
                 const std::string expirationDate = oss.str();
 
                 const std::string updateQuery = "UPDATE EventCommands SET ExpirationDate = ?";
-                std::unique_ptr<sql::PreparedStatement> updateStmt(m_con->prepareStatement(updateQuery));
+                std::unique_ptr<sql::PreparedStatement> updateStmt(m_transactionalCon->prepareStatement(updateQuery));
                 updateStmt->setString(1, expirationDate);
                 int affected = updateStmt->executeUpdate();
 
                 if (affected == 0)
                 {
                     const std::string insertQuery = "INSERT INTO EventCommands (ExpirationDate) VALUES (?)";
-                    std::unique_ptr<sql::PreparedStatement> insertStmt(m_con->prepareStatement(insertQuery));
+                    std::unique_ptr<sql::PreparedStatement> insertStmt(m_transactionalCon->prepareStatement(insertQuery));
                     insertStmt->setString(1, expirationDate);
                     insertStmt->executeUpdate();
                 }
 
+                tx.commit();
                 return true;
             }
             catch (const sql::SQLException& e)
@@ -3322,7 +3247,6 @@ namespace Main
                 return false;
             }
         }
-
 
         bool PersistentDatabase::isCommandEventExpired()
         {
