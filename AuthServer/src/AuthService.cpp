@@ -118,7 +118,7 @@ namespace Auth
 			m_persistentDatabase.logGameEvent("AuthGradedLogin",
 				"Failed login: incorrect password for account " + std::to_string(ainfo.ainfoClient.accountId), "MEDIUM");
 		}
-		if (!tokenOk)
+		else if (!tokenOk)
 		{
 			++counters.totalWrong2fas;
 			m_persistentDatabase.logGameEvent("AuthGradedLogin",
@@ -205,7 +205,7 @@ namespace Auth
 			m_persistentDatabase.logGameEvent("AuthUngradedLogin",
 				"Failed login: incorrect password for ungraded account " + std::to_string(ainfo.ainfoClient.accountId),"LOW");
 		}
-		if (!tokenOk)
+		else if (!tokenOk)
 		{
 			++counters.totalWrong2fas;
 			m_persistentDatabase.logGameEvent("AuthUngradedLogin",
