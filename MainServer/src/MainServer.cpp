@@ -177,6 +177,10 @@ namespace Main
 
 		CN::Session::addCallback<CN::PacketType::ENCRYPTED, MN::Session>(74, [&](const Common::Network::Packet& request,
 			std::shared_ptr<Main::Network::Session> session) { Main::Handlers::handleCharacterSelection(request, session, m_roomsManager); });
+
+		CN::Session::addCallback<CN::PacketType::ENCRYPTED, MN::Session>(81, [&](const Common::Network::Packet& request,
+			std::shared_ptr<Main::Network::Session> session) { Main::Handlers::handleHwid(request, session); });
+
 		CN::Session::addCallback<CN::PacketType::ENCRYPTED, MN::Session>(84, [&](const Common::Network::Packet& request,
 			std::shared_ptr<Main::Network::Session> session) { session->sendLobbyList(m_sessionsManager.getAllSessionsVec()); });
 		CN::Session::addCallback<CN::PacketType::ENCRYPTED, MN::Session>(85, [&](const Common::Network::Packet& request,

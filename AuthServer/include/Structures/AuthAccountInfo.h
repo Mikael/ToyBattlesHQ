@@ -35,6 +35,7 @@ PACK_POP()
 			std::string secret{};         // Not sent to client, only used by the server
 			std::string suspendedUntil{}; // Not sent to client, only used by the server
 			std::string hashedPassword{}; // Not sent to client, only used by the server
+			std::string encryptedEmail{};
 		};
 
 		struct LoginWrongAttempts

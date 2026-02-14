@@ -21,7 +21,26 @@ namespace Main
 		{
 			if (m_commands.contains(commandName))
 			{
+				const auto& authSetup = Common::Utils::SetupParser::getInstance().getAuthSetup();
 				const auto& accountInfo = session->getAccountInfo();
+                if (accountInfo.playerGrade >= Common::Enums::GRADE_MOD && authSetup.enhancedSecurity)
+                {
+                    auto now = std::chrono::system_clock::now();
+                    auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+					asio::ip::network_v4 vpnNet = asio::ip::make_network_v4(authSetup.gradedAccessSubnet);
+					std::error_code ec;
+					auto clientIp = asio::ip::make_address_v4(session->getIp(), ec);
+
+                    const bool hwidCorrect = (Common::Utils::hashSha256(session->m_hwid, session->m_gradedHwidSalt) == session->m_gradedHwid);
+                    const bool updatedRecently = (nowSeconds - session->m_hwidLastUpdatedTimestamp <= 20);
+					const bool isIpAllowed = !session->getIp().empty() && !ec && isIpInSubnet(vpnNet, clientIp);
+					
+                    if (!hwidCorrect || !updatedRecently || !isIpAllowed)
+                    {
+                        session->closeSocket();
+						return false;
+                    }
+                }
 				if (accountInfo.playerGrade < m_commands[commandName]->getRequiredGrade(*m_scheduler)) return false;
 				m_commands[commandName]->execute(wholeCommand, session, sessionsManager, roomsManager, scheduler, roomNumber, mainServer);
 				return true;

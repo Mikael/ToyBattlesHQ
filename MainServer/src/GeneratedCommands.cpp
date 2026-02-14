@@ -17,7 +17,6 @@
 #include "../include/ChatCommands/Commands/Invisible.h"
 #include "../include/ChatCommands/Commands/JoinInvisible.h"
 #include "../include/ChatCommands/Commands/Kick.h"
-#include "../include/ChatCommands/Commands/MatchBan.h"
 #include "../include/ChatCommands/Commands/Mute.h"
 #include "../include/ChatCommands/Commands/Muteroom.h"
 #include "../include/ChatCommands/Commands/OnlineCommand.h"

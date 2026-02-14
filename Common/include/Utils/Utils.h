@@ -20,6 +20,7 @@
 #include "../Enums/GameEnums.h"
 #include <vector>
 #include "../Network/Session.h"
+#include "SetupParser.h"
 
 
 #undef ENABLE_DEBUG_MESSAGES
@@ -149,10 +150,39 @@ namespace Common
 			return recovered;
 		}
 
-		inline std::optional<std::string> decryptEmail(const std::string& stored, const std::vector<SecByteBlock>& keyRing) 
+		inline std::optional<std::string> decryptEmail(const std::string& stored,const SecByteBlock& key)
 		{
 			const std::string PREFIX = "email:gcm:v1:";
-			if (stored.rfind(PREFIX, 0) != 0) return stored;
+
+			if (stored.rfind(PREFIX, 0) != 0)
+				return stored;
+
+			std::string jsonStr;
+			StringSource ss(stored.substr(PREFIX.size()),true,new Base64Decoder(new StringSink(jsonStr)));
+
+			json::value jv = json::parse(jsonStr);
+			json::object obj = jv.as_object();
+
+			std::vector<byte> iv = hexDecode(obj["iv"].as_string().c_str());
+			std::vector<byte> tag = hexDecode(obj["tag"].as_string().c_str());
+			std::vector<byte> ct = hexDecode(obj["ct"].as_string().c_str());
+
+			try
+			{
+				return decryptAESGCM(key, iv, tag, ct);
+			}
+			catch (...)
+			{
+				return std::nullopt;
+			}
+		}
+
+		inline std::optional<std::string> decrypt2FASecret(const std::string& stored, const SecByteBlock& key)
+		{
+			const std::string PREFIX = "2fa:gcm:v1:";
+
+			if (stored.rfind(PREFIX, 0) != 0)
+				return stored;
 
 			std::string jsonStr;
 			StringSource ss(stored.substr(PREFIX.size()), true, new Base64Decoder(new StringSink(jsonStr)));
@@ -164,19 +194,7 @@ namespace Common
 			std::vector<byte> tag = hexDecode(obj["tag"].as_string().c_str());
 			std::vector<byte> ct = hexDecode(obj["ct"].as_string().c_str());
 
-			for (const auto& key : keyRing) 
-			{
-				try 
-				{
-					return decryptAESGCM(key, iv, tag, ct);
-				}
-				catch (...) 
-				{
-					continue;
-				}
-			}
-
-			return std::nullopt;
+			return decryptAESGCM(key, iv, tag, ct); 
 		}
 
 		inline size_t payload_source(void* ptr, size_t size, size_t nmemb, void* userp) 
@@ -191,25 +209,44 @@ namespace Common
 			return copy_size;
 		}
 
-		inline bool sendEmail(const std::string& smtpServer, const std::string& smtpUser, const std::string& smtpPass, const std::string& from, const std::string& to,
-			const std::string& subject, const std::string& body)
+	
+		inline bool sendEmails(const std::vector<std::string>& recipients, const std::string& subject, const std::string& body)
 		{
+			if (recipients.empty()) 
+			{
+				::Utils::Logger::log("[sendEmails] sendEmail called with empty recipients list", ::Utils::LogType::Warning, "sendEmail");
+				return false;
+			}
+
+			const auto& generalSetup = Common::Utils::SetupParser::getInstance().getGeneralSetup();
+
 			CURL* curl = curl_easy_init();
-			if (!curl) return false;
+			if (!curl) 
+			{
+				::Utils::Logger::log("[sendEmails] Failed to initialize CURL",::Utils::LogType::Error, "sendEmail");
+				return false;
+			}
 
-			struct curl_slist* recipients = nullptr;
-			recipients = curl_slist_append(recipients, to.c_str());
+			struct curl_slist* recipientList = nullptr;
+			std::string toHeader;
+			for (size_t i = 0; i < recipients.size(); ++i) 
+			{
+				recipientList = curl_slist_append(recipientList, recipients[i].c_str());
 
-			std::string data = "To: " + to + "\r\n" +
-				"From: " + from + "\r\n" +
+				if (i > 0) toHeader += ", ";
+				toHeader += recipients[i];
+			}
+
+			std::string data = "To: " + toHeader + "\r\n" +
+				"From: " + generalSetup.email + "\r\n" +
 				"Subject: " + subject + "\r\n" +
 				"\r\n" + body + "\r\n";
 
-			curl_easy_setopt(curl, CURLOPT_USERNAME, smtpUser.c_str());
-			curl_easy_setopt(curl, CURLOPT_PASSWORD, smtpPass.c_str());
-			curl_easy_setopt(curl, CURLOPT_URL, smtpServer.c_str());
-			curl_easy_setopt(curl, CURLOPT_MAIL_FROM, from.c_str());
-			curl_easy_setopt(curl, CURLOPT_MAIL_RCPT, recipients);
+			curl_easy_setopt(curl, CURLOPT_USERNAME, generalSetup.email.c_str());
+			curl_easy_setopt(curl, CURLOPT_PASSWORD, generalSetup.emailToken.c_str());
+			curl_easy_setopt(curl, CURLOPT_URL, generalSetup.smtpServer.c_str());
+			curl_easy_setopt(curl, CURLOPT_MAIL_FROM, generalSetup.email.c_str());
+			curl_easy_setopt(curl, CURLOPT_MAIL_RCPT, recipientList);
 			curl_easy_setopt(curl, CURLOPT_READFUNCTION, payload_source);
 			curl_easy_setopt(curl, CURLOPT_READDATA, &data);
 			curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
@@ -217,15 +254,38 @@ namespace Common
 			curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_ALL);
 
 			CURLcode res = curl_easy_perform(curl);
-			//if (res != CURLE_OK) {
-				//fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-			//}
 
-			curl_slist_free_all(recipients);
+			if (res != CURLE_OK) {
+				::Utils::Logger::log("[sendEmails] curl_easy_perform() failed: " + std::string(curl_easy_strerror(res)), ::Utils::LogType::Error, "sendEmail");
+			}
+
+			curl_slist_free_all(recipientList);
 			curl_easy_cleanup(curl);
 
 			return res == CURLE_OK;
 		}
+
+		inline bool sendEmail(const std::string& to, const std::string& subject, const std::string& body)
+		{
+			return sendEmails(std::vector<std::string>{to}, subject, body);
+		}
+
+		inline bool sendEmailAlert(const std::string& title, const std::string message)
+		{
+			return sendEmails(Common::Utils::SetupParser::getInstance().getGeneralSetup().securityNotificationEmails, title, message);
+		}
+
+		inline std::string hashSha256(const std::string& hwid, const std::string& salt)
+		{
+			std::string concatenated = hwid + salt;
+			std::string digest;
+
+			CryptoPP::SHA256 hash;
+			CryptoPP::StringSource ss(concatenated, true, new CryptoPP::HashFilter(hash, new CryptoPP::HexEncoder(new CryptoPP::StringSink(digest), false)));
+
+			return digest;
+		}
+
 	}
 }
 

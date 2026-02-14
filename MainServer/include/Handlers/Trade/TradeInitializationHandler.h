@@ -47,8 +47,6 @@ namespace Main
 		inline void handleTradeInitialization(const Common::Network::Packet& request, std::shared_ptr<Main::Network::Session> session, 
 			Main::Network::SessionsManager& sessionsManager)
 		{
-			if (session->hasBeenMatchBanned()) return;
-
 			Common::Network::Packet response;
 			response.setTcpHeader(request.getSession(), Common::Enums::USER_LARGE_ENCRYPTION);
 			response.setOrder(request.getOrder());

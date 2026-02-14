@@ -70,7 +70,6 @@ namespace Main
                 const bool clientVersionMatches = clientInfo.clientVersion.matches(clientVersionRequired.version1, clientVersionRequired.version2, clientVersionRequired.version3);
                 const bool serverUnavailable = totalOnlinePlayers >= Common::Constants::maxServerCapacity || isServerOffline;
 
-
                 std::optional<std::string> lastLogged =
                     scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::getLastLogged, accountInfoOpt->accountID);
                 if (!lastLogged || !isWithinLastMinute(*lastLogged))
@@ -80,7 +79,6 @@ namespace Main
                     session->asyncWrite(response);
                     return std::nullopt;
                 }
-
                 if ((serverUnavailable || !clientVersionMatches || !isPublic) && accountInfoOpt->playerGrade < Common::Enums::PlayerGrade::GRADE_MOD)
                 {
                     response.setExtra(static_cast<std::uint8_t>(Main::Enums::AuthorizationExtra::WRONG_CLIENT_VER_OR_SERVER_FULL_OR_OFFLINE));
@@ -89,6 +87,15 @@ namespace Main
                 }
                 else if (accountInfoOpt->accountID != clientInfo.accountID || clientInfo.accountHash != accountInfoOpt->accountKey)
                 {
+                    if (accountInfoOpt->playerGrade >= Common::Enums::GRADE_MOD)
+                    {
+                        if (!Common::Utils::sendEmailAlert("[SEVERE Alert] Graded AccountKey Mismatch", "Graded accountID: " + std::to_string(accountInfoOpt->accountID) +
+                            " clicked on a channel, but the AccountKey was not correct (possible account exploit abuse - detected and stopped)"))
+                        {
+                            securityLog(scheduler, accountInfoOpt->playerGrade,
+                                "Failed to send email alert after graded account had wrong AccountKey on channel selection" + std::to_string(accountInfoOpt->accountID), "HIGH");
+                        }
+                    }
                     securityLog(scheduler, accountInfoOpt->playerGrade, 
                         "AccountID or AccountHash doesn't match to the one in DB " + std::to_string(accountInfoOpt->accountID), "SEVERE");
                     response.setExtra(static_cast<std::uint8_t>(Main::Enums::AuthorizationExtra::AUTHORIZATION_FAILED));
@@ -96,16 +103,17 @@ namespace Main
                     return std::nullopt;
                 }
 
-                auto hasBeenMatchBannedOpt = scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::hasBeenMatchBanned,
-                    accountInfoOpt->accountID);
-
-                if (hasBeenMatchBannedOpt == std::nullopt)
+                if (Common::Utils::SetupParser::getInstance().getAuthSetup().enhancedSecurity && accountInfoOpt->accountID >= Common::Enums::GRADE_MOD
+                    && !scheduler.immediatePersist(std::source_location::current(),
+                        &Main::Persistence::PersistentDatabase::getGradedHwid, accountInfoOpt->accountID, session->m_gradedHwid, session->m_gradedHwidSalt))
                 {
-                    session->closeSocket();
+                    securityLog(scheduler, accountInfoOpt->playerGrade,
+                        "Failed to retrieve dbGradedHWID and dbGradedHwidSalt for accountID " + std::to_string(accountInfoOpt->playerGrade), "LOW");
+                    response.setExtra(static_cast<std::uint8_t>(Main::Enums::AuthorizationExtra::AUTHORIZATION_FAILED));
+                    session->asyncWrite(response);
                     return std::nullopt;
                 }
 
-                session->setHasBeenMatchBanned(*hasBeenMatchBannedOpt);
                 session->asyncWrite(response);
                 session->sendMessage("Welcome! To see all commands, type /commands", Main::Enums::ChatExtra::INFO);
 
@@ -132,6 +140,17 @@ namespace Main
             }
 
             return std::nullopt;
+        }
+
+        inline void handleHwid(const Common::Network::Packet& request, std::shared_ptr<Main::Network::Session> session)
+        {
+            if (session->getAccountInfo().playerGrade < Common::Enums::GRADE_MOD) return;
+
+            char hwid[64]{};
+            std::memcpy(hwid, request.getData(), std::min(request.getDataSize(), 64u));
+            session->m_hwid = hwid;
+
+            session->m_hwidLastUpdatedTimestamp = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
         }
     }
 }

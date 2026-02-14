@@ -10,6 +10,8 @@
 #include "../../include/Utils/SetupParser.h"
 #include <regex>
 
+
+
 namespace Common
 {
     namespace Utils
@@ -31,6 +33,7 @@ namespace Common
             m_dbSetup = getDatabaseSetupImpl();
             m_websiteSetup = getWebsiteSetupImpl();
             m_clientSetup = getClientSetupImpl();
+            m_generalSetup = getGeneralSetupImpl();
         }
 
         void SetupParser::handleError(const std::string& message)
@@ -193,7 +196,7 @@ namespace Common
         {
             if (!m_iniFile.contains("Website"))
             {
-                ::Utils::Logger::log("[Website] section missing in config.ini", ::Utils::LogType::Error, "SetupParser::checkWebsiteConfig");
+                ::Utils::Logger::log("[Website] section missing in config.ini",::Utils::LogType::Error,"SetupParser::checkWebsiteConfig");
                 return false;
             }
 
@@ -201,7 +204,19 @@ namespace Common
 
             if (website["Ip"].as<std::string>().empty() || website["Port"].as<std::uint32_t>() == 0)
             {
-                ::Utils::Logger::log("Invalid website configuration in config.ini", ::Utils::LogType::Error, "SetupParser::checkWebsiteConfig");
+                ::Utils::Logger::log("Invalid website IP or Port configuration in config.ini",::Utils::LogType::Error,"SetupParser::checkWebsiteConfig");
+                return false;
+            }
+
+            if (website["JwtTokenEnvironmentName"].as<std::string>().empty())
+            {
+                ::Utils::Logger::log("JwtTokenEnvironmentName missing or empty in config.ini",::Utils::LogType::Error,"SetupParser::checkWebsiteConfig");
+                return false;
+            }
+
+            if (!website.contains("AllowedOrigins") || website["AllowedOrigins"].as<std::string>().empty())
+            {
+                ::Utils::Logger::log("AllowedOrigins missing or empty in config.ini",::Utils::LogType::Error,"SetupParser::checkWebsiteConfig");
                 return false;
             }
 
@@ -234,7 +249,164 @@ namespace Common
 
         bool SetupParser::sanityCheck()
         {
-            return checkAuthSection() && checkMainCastSession() && checkDatabaseConfig() && checkWebsiteConfig() && checkClientConfig();
+            return checkAuthSection() && checkGeneralConfig() && checkMainCastSession() && checkDatabaseConfig() && checkWebsiteConfig() && checkClientConfig();
+        }
+
+        GeneralSetup SetupParser::getGeneralSetupImpl()
+        {
+            GeneralSetup generalSetup;
+
+            ini::IniSection& section = m_iniFile["General"];
+
+            const std::string emailSecretEnv = section["EmailSecret"].as<std::string>();
+            const std::string twoFaSecretEnv = section["2faSecret"].as<std::string>();
+            const std::string emailTokenEnv = section["EmailToken"].as<std::string>();
+
+            const char* emailSecretVal = std::getenv(emailSecretEnv.c_str());
+            const char* twoFaSecretVal = std::getenv(twoFaSecretEnv.c_str());
+            const char* emailTokenVal = std::getenv(emailTokenEnv.c_str());
+
+            generalSetup.emailSecret.resize(32);
+            generalSetup.twoFaSecret.resize(32);
+
+            {
+                CryptoPP::StringSource ss(emailSecretVal, true, new CryptoPP::HexDecoder(new CryptoPP::ArraySink(generalSetup.emailSecret.data(), generalSetup.emailSecret.size())));
+            }
+
+            {
+                CryptoPP::StringSource ss(twoFaSecretVal, true, new CryptoPP::HexDecoder(new CryptoPP::ArraySink(generalSetup.twoFaSecret.data(), generalSetup.twoFaSecret.size())));
+            }
+
+            generalSetup.emailToken = emailTokenVal;
+            generalSetup.smtpServer = section["SmtpServer"].as<std::string>();
+            generalSetup.email = section["EmailSender"].as<std::string>();
+
+            generalSetup.securityNotificationEmails.clear();
+            std::string emailsStr = section["SecurityNotificationReceiver"].as<std::string>();
+
+            if (!emailsStr.empty())
+            {
+                std::stringstream ss(emailsStr);
+                std::string email;
+                std::string emailList;
+
+                while (std::getline(ss, email, ','))
+                {
+                    email = trim(email);
+
+                    if (!email.empty())
+                    {
+                        generalSetup.securityNotificationEmails.push_back(email);
+
+                        if (!emailList.empty()) emailList += ", ";
+                        emailList += email;
+                    }
+                }
+
+                ::Utils::Logger::log("Added security notification emails: " + emailList, ::Utils::LogType::Info, "SetupParser::getGeneralSetupImpl");
+            }
+
+            return generalSetup;
+        }
+
+
+        bool SetupParser::checkGeneralConfig()
+        {
+            if (!m_iniFile.contains("General"))
+            {
+                ::Utils::Logger::log("[General] section missing in config.ini",::Utils::LogType::Error,"SetupParser::checkGeneralConfig");
+                return false;
+            }
+
+            ini::IniSection& general = m_iniFile["General"];
+
+            std::string emailSecretEnv = general["EmailSecret"].as<std::string>();
+            if (emailSecretEnv.empty())
+            {
+                ::Utils::Logger::log("EmailSecret missing or empty in [General]",::Utils::LogType::Error,"SetupParser::checkGeneralConfig");
+                return false;
+            }
+
+            const char* emailSecretVal = std::getenv(emailSecretEnv.c_str());
+            if (!emailSecretVal)
+            {
+                ::Utils::Logger::log("Environment variable not set: " + emailSecretEnv,::Utils::LogType::Error,"SetupParser::checkGeneralConfig");
+                return false;
+            }
+
+            try
+            {
+                std::string decoded;
+                CryptoPP::StringSource ss(emailSecretVal,true,new CryptoPP::HexDecoder(new CryptoPP::StringSink(decoded)));
+
+                if (decoded.size() != 32)
+                {
+                    ::Utils::Logger::log("EmailSecret must decode to exactly 32 bytes (AES-256)",::Utils::LogType::Error,"SetupParser::checkGeneralConfig");
+                    return false;
+                }
+            }
+            catch (...)
+            {
+                ::Utils::Logger::log("EmailSecret is not valid hex",::Utils::LogType::Error,"SetupParser::checkGeneralConfig");
+                return false;
+            }
+
+            std::string twoFaSecretEnv = general["2faSecret"].as<std::string>();
+            if (twoFaSecretEnv.empty())
+            {
+                ::Utils::Logger::log("2faSecret missing or empty in [General]",::Utils::LogType::Error,"SetupParser::checkGeneralConfig");
+                return false;
+            }
+
+            const char* twoFaSecretVal = std::getenv(twoFaSecretEnv.c_str());
+            if (!twoFaSecretVal)
+            {
+                ::Utils::Logger::log("Environment variable not set: " + twoFaSecretEnv,::Utils::LogType::Error,"SetupParser::checkGeneralConfig");
+                return false;
+            }
+
+            try
+            {
+                std::string decoded;
+                CryptoPP::StringSource ss(twoFaSecretVal,true,new CryptoPP::HexDecoder(new CryptoPP::StringSink(decoded)));
+
+                if (decoded.size() != 32)
+                {
+                    ::Utils::Logger::log("2faSecret must decode to exactly 32 bytes (AES-256)",::Utils::LogType::Error,"SetupParser::checkGeneralConfig");
+                    return false;
+                }
+            }
+            catch (...)
+            {
+                ::Utils::Logger::log("2faSecret is not valid hex",::Utils::LogType::Error,"SetupParser::checkGeneralConfig");
+                return false;
+            }
+
+            if (general["SmtpServer"].as<std::string>().empty())
+            {
+                ::Utils::Logger::log("SmtpServer missing or empty in [General]",::Utils::LogType::Error,"SetupParser::checkGeneralConfig");
+                return false;
+            }
+
+            if (general["EmailSender"].as<std::string>().empty())
+            {
+                ::Utils::Logger::log("EmailSender missing or empty in [General]",::Utils::LogType::Error,"SetupParser::checkGeneralConfig");
+                return false;
+            }
+
+            if (general["EmailToken"].as<std::string>().empty())
+            {
+                ::Utils::Logger::log("EmailToken missing or empty in [General]",::Utils::LogType::Error,"SetupParser::checkGeneralConfig");
+                return false;
+            }
+
+            if (general["SecurityNotificationReceiver"].as<std::string>().empty())
+            {
+                ::Utils::Logger::log("SecurityNotificationReceiver missing or empty in [General]", ::Utils::LogType::Error, "SetupParser::checkSecurityConfig");
+                return false;
+            }
+
+            return true;
         }
 
 
@@ -375,8 +547,32 @@ namespace Common
         WebsiteSetup SetupParser::getWebsiteSetupImpl()
         {
             WebsiteSetup website;
-            website.ip = m_iniFile["Website"]["Ip"].as<std::string>();
-            website.port = m_iniFile["Website"]["Port"].as<std::uint32_t>();
+
+            ini::IniSection& section = m_iniFile["Website"];
+
+            website.ip = section["Ip"].as<std::string>();
+            website.port = section["Port"].as<std::uint32_t>();
+
+            std::string jwtEnvName = section["JwtTokenEnvironmentName"].as<std::string>();
+            const char* jwtEnvValue = std::getenv(jwtEnvName.c_str());
+            if (jwtEnvValue)
+                website.jwtToken = jwtEnvValue;
+            else
+            {
+                ::Utils::Logger::log("Environment variable for JwtTokenEnvironmentName (" + jwtEnvName + ") not set",::Utils::LogType::Error,"SetupParser::getWebsiteSetupImpl");
+            }
+
+            website.allowedOrigins.clear();
+            std::string originsStr = section["AllowedOrigins"].as<std::string>();
+            std::stringstream ss(originsStr);
+            std::string origin;
+
+            while (std::getline(ss, origin, ','))
+            {
+                origin = trim(origin);
+                if (!origin.empty())
+                    website.allowedOrigins.push_back(origin);
+            }
 
             return website;
         }

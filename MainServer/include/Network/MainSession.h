@@ -48,9 +48,10 @@ namespace Main
 			std::uint64_t m_matchStartTime{};
 			bool m_hasCheckedMatchBan = false;
 			bool m_isInvisible{};
-			bool m_hasBeenMatchBanned{};
 			std::string m_hwid{ "" };
-			std::uint32_t m_pingPacketCounter = 0;
+			std::uint64_t m_hwidLastUpdatedTimestamp{};
+			std::string m_gradedHwid{ "" };
+			std::string m_gradedHwidSalt{ "" };
 			
 			using Item = Main::Structures::Item;
 			using EquippedItem = Main::Structures::EquippedItem;
@@ -243,13 +244,9 @@ namespace Main
 
 			void setBlockedPlayers(const std::vector<Main::Structures::BlockedPlayer>& blockedPlayers);
 
-			void setHasBeenMatchBanned(bool v);
-
 			void setIsInvisible(bool value);
 
 			bool isInvisible() const noexcept;
-
-			bool hasBeenMatchBanned() const noexcept;
 
 			// call once with default "persist", since removeFriend removes the friend for both players
 			void deleteFriend(std::uint32_t targetAccountId, bool persist = true);
@@ -298,10 +295,6 @@ namespace Main
 			void sendWeeklyReward();
 
 			void sendMonthlyReward();
-
-			void storeHwid();
-
-			void updateHwid(const std::string& hwid);
 
 			void addFriend(const Main::Structures::Friend& ffriend);
 

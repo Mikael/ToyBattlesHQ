@@ -517,16 +517,6 @@ namespace Main
 			return m_isInvisible;
 		}
 
-		void Session::setHasBeenMatchBanned(bool v)
-		{
-			m_hasBeenMatchBanned = v;
-		}
-
-		bool Session::hasBeenMatchBanned() const noexcept
-		{
-			return m_hasBeenMatchBanned;
-		}
-
 		void Session::setBlockedPlayers(const std::vector<Main::Structures::BlockedPlayer>& blockedPlayers)
 		{
 			m_player.setBlockedPlayers(blockedPlayers);
@@ -968,17 +958,6 @@ namespace Main
 			return m_player.addOnlineFriend(session);
 		}
 
-		void Session::updateHwid(const std::string& hwid)
-		{
-			m_hwid = hwid;
-		}
-
-		void Session::storeHwid()
-		{
-			m_scheduler.immediatePersist(std::source_location::current(),
-				&Main::Persistence::PersistentDatabase::updateHwid, m_player.getAccountID(), m_hwid);
-		}
-
 		void Session::equipItem(const std::uint16_t itemNumber)
 		{
 			m_player.equipItem(itemNumber, m_scheduler);
@@ -1374,11 +1353,6 @@ namespace Main
 
 		bool Session::banAccount(std::uint64_t daysDuration, const std::string& reason, bool isMatchBan)
 		{
-			if (isMatchBan)
-			{
-				m_hasBeenMatchBanned = true;
-			}
-
 			using namespace std::chrono;
 			using namespace std::literals;
 			zoned_time zt{ "UTC", local_seconds{duration_cast<seconds>(system_clock::now().time_since_epoch()) + seconds(daysDuration * 24 * 60 * 60)}};

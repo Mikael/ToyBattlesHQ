@@ -26,48 +26,55 @@ namespace Main
     {
         PersistentDatabase::PersistentDatabase()
         {
-            const auto& dbSetup = Common::Utils::SetupParser::getInstance().getDatabaseSetup();
-            int retryCount = 0;
-            const int maxRetries = 5;
+           connectWithRetry();
+        }
 
-            while (retryCount < maxRetries)
+        void PersistentDatabase::connectWithRetry()
+        {
+            const auto& dbSetup = Common::Utils::SetupParser::getInstance().getDatabaseSetup();
+
+            constexpr int maxRetries = 5;
+
+            for (int attempt = 1; attempt <= maxRetries; ++attempt)
             {
                 try
                 {
-                    m_con = sql::mariadb::get_driver_instance()->connect("tcp://" + dbSetup.ip + ":" + std::to_string(dbSetup.port),
-                        dbSetup.username, dbSetup.password);
+                    ::Utils::Logger::log("Connecting to MariaDB (attempt " +std::to_string(attempt) + ")", Utils::LogType::Info, "PersistentDatabase");
+
+                    m_con = sql::mariadb::get_driver_instance()->connect("tcp://" + dbSetup.ip + ":" + std::to_string(dbSetup.port),dbSetup.username,dbSetup.password);
+
                     m_con->setSchema(dbSetup.databaseName);
-                    m_con->setAutoCommit(true); 
+                    m_con->setAutoCommit(true);
 
-                    ::Utils::Logger::log("Successfully connected to MariaDB", Utils::LogType::Info, "PersistentDatabase");
+                    ::Utils::Logger::log("Connected to MariaDB successfully", Utils::LogType::Info, "PersistentDatabase");
 
-                    std::thread([this]() {
-                        while (true)
-                        {
-                            std::this_thread::sleep_for(std::chrono::minutes(2));
-                            pingDatabase();
-                        }
-                        }).detach();
-                        return;  
+                    return; 
                 }
                 catch (const sql::SQLException& e)
                 {
-                    ++retryCount;
-                    ::Utils::Logger::log("Error connecting to MariaDB: " + std::string(e.what()) + ", attempt " + std::to_string(retryCount),
-                        Utils::LogType::Error, "PersistentDatabase");
+                    ::Utils::Logger::log("Connection failed: " + std::string(e.what()),Utils::LogType::Error, "PersistentDatabase");
 
-                    if (retryCount < maxRetries)
+                    if (attempt == maxRetries)
                     {
-                        std::this_thread::sleep_for(std::chrono::seconds(2 * retryCount)); 
+                        ::Utils::Logger::log("Max connection retries reached!", Utils::LogType::Error,"PersistentDatabase");
+                        throw;
                     }
-                    else
-                    {
-                        ::Utils::Logger::log("Max reconnection attempts reached, stopping...",
-                            Utils::LogType::Error, "PersistentDatabase");
-                        throw;  
-                    }
+
+                    std::this_thread::sleep_for(std::chrono::seconds(1 * attempt));
                 }
             }
+        }
+
+        void PersistentDatabase::reconnect()
+        {
+            if (m_con)
+            {
+                try { m_con->close(); } catch (...) {}
+                delete m_con;
+                m_con = nullptr;
+            }
+
+            connectWithRetry();
         }
 
         void PersistentDatabase::pingDatabase()
@@ -82,7 +89,7 @@ namespace Main
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB ping failed: " + std::string(e.what()) + " - Reconnecting",
+                ::Utils::Logger::log("MariaDB ping failed: " + std::string(e.what()) + ", reconnecting", 
                     Utils::LogType::Warning, "PersistentDatabase::pingDatabase");
 
                 try
@@ -91,53 +98,7 @@ namespace Main
                 }
                 catch (const sql::SQLException& e)
                 {
-                    ::Utils::Logger::log("Reconnection failed: " + std::string(e.what()),
-                        Utils::LogType::Error, "PersistentDatabase::pingDatabase");
-                }
-            }
-        }
-
-        void PersistentDatabase::reconnect()
-        {
-            const auto& dbSetup = Common::Utils::SetupParser::getInstance().getDatabaseSetup();
-            int retryCount = 0;
-            const int maxRetries = 5;
-
-            while (retryCount < maxRetries)
-            {
-                try
-                {
-                    ::Utils::Logger::log("Attempting to reconnect to MariaDB", Utils::LogType::Warning, "PersistentDatabase::reconnect");
-
-                    if (m_con)
-                    {
-                        m_con->close();
-                        m_con->reset();
-                    }
-
-                    m_con = sql::mariadb::get_driver_instance()->connect("tcp://" + dbSetup.ip + ":" + std::to_string(dbSetup.port),
-                        dbSetup.username, dbSetup.password);
-                    m_con->setSchema(dbSetup.databaseName);
-
-                    ::Utils::Logger::log("Reconnected to MariaDB successfully.", Utils::LogType::Info, "PersistentDatabase::reconnect");
-                    return; 
-                }
-                catch (const sql::SQLException& e)
-                {
-                    ++retryCount;
-                    ::Utils::Logger::log("MariaDB reconnection failed: " + std::string(e.what()) + ", attempt " + std::to_string(retryCount),
-                        Utils::LogType::Error, "PersistentDatabase::reconnect");
-
-                    if (retryCount < maxRetries)
-                    {
-                        std::this_thread::sleep_for(std::chrono::seconds(2 * retryCount)); 
-                    }
-                    else
-                    {
-                        ::Utils::Logger::log("Max reconnection attempts reached, giving up.",
-                            Utils::LogType::Error, "PersistentDatabase::reconnect");
-                        throw; 
-                    }
+                    ::Utils::Logger::log("Reconnection failed: " + std::string(e.what()),Utils::LogType::Error, "PersistentDatabase::pingDatabase");
                 }
             }
         }
@@ -1741,134 +1702,6 @@ namespace Main
                 return false;
             }
             return true;
-        }
-
-        bool PersistentDatabase::updateHwid(std::uint32_t accountId, const std::string& hwid)
-        {
-            try
-            {
-                std::string updateQuery = "UPDATE Users SET HWID = ? WHERE AccountID = ?";
-                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(updateQuery));
-                stmt->setString(1, hwid);
-                stmt->setUInt(2, accountId);
-                return stmt->executeUpdate() > 0;
-            }
-            catch (const sql::SQLException& e)
-            {
-                ::Utils::Logger::log(std::string("MariaDB exception: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::updateHwid");
-                return false;
-            }
-        }
-
-        std::optional<bool> PersistentDatabase::hasBeenMatchBanned(std::uint32_t accountId)
-        {
-            try
-            {
-                std::string infoQuery = "SELECT LastIp, HWID FROM Users WHERE AccountID = ?";
-                std::unique_ptr<sql::PreparedStatement> infoStmt(m_con->prepareStatement(infoQuery));
-                infoStmt->setUInt(1, accountId);
-                std::unique_ptr<sql::ResultSet> infoRes(infoStmt->executeQuery());
-
-                if (!infoRes->next())
-                    return false;
-
-                std::string lastIp = infoRes->getString("LastIp").c_str();
-                std::string hwid = infoRes->getString("HWID").c_str();
-
-                if (lastIp.empty() && hwid.empty())
-                {
-                    std::string selfBanQuery = R"(
-                        SELECT COUNT(*) FROM Users 
-                        WHERE AccountID = ? AND SuspensionReason IN ('AUTOMATIC_CHEAT_BAN', 'AUTOMATIC_CHEAT_BAN_HWID')
-                    )";
-
-                    std::unique_ptr<sql::PreparedStatement> selfBanStmt(m_con->prepareStatement(selfBanQuery));
-                    selfBanStmt->setUInt(1, accountId);
-                    std::unique_ptr<sql::ResultSet> selfBanRes(selfBanStmt->executeQuery());
-
-                    if (selfBanRes->next())
-                        return selfBanRes->getUInt(1) > 0;
-
-                    return false;
-                }
-
-                std::string banQuery = R"(
-                    SELECT SuspensionReason, LastIp, HWID FROM Users
-                    WHERE AccountID != ?
-                      AND (
-                            (LastIp = ? AND ? != '') OR 
-                            (HWID = ? AND ? != '')
-                          )
-                      AND SuspensionReason IN ('AUTOMATIC_CHEAT_BAN', 'AUTOMATIC_CHEAT_BAN_HWID')
-                    LIMIT 1
-                )";
-
-                std::unique_ptr<sql::PreparedStatement> banStmt(m_con->prepareStatement(banQuery));
-                banStmt->setUInt(1, accountId);
-                banStmt->setString(2, lastIp);
-                banStmt->setString(3, lastIp);
-                banStmt->setString(4, hwid);
-                banStmt->setString(5, hwid);
-
-                std::unique_ptr<sql::ResultSet> banRes(banStmt->executeQuery());
-                if (banRes->next())
-                {
-                    std::string matchedIp = banRes->getString("LastIp").c_str();
-                    std::string matchedHwid = banRes->getString("HWID").c_str();
-
-                    std::string reason;
-                    if (!hwid.empty() && hwid == matchedHwid)
-                        reason = "AUTOMATIC_CHEAT_BAN_HWID";
-                    else
-                        reason = "AUTOMATIC_CHEAT_BAN";
-
-                    std::string updateQuery = R"(
-                        UPDATE Users 
-                        SET SuspensionReason = ? 
-                        WHERE AccountID = ?
-                    )";
-
-                    std::unique_ptr<sql::PreparedStatement> updateStmt(m_con->prepareStatement(updateQuery));
-                    updateStmt->setString(1, reason);
-                    updateStmt->setUInt(2, accountId);
-                    updateStmt->executeUpdate();
-
-                    return true;
-                }
-
-                return false;
-            }
-            catch (const sql::SQLException& e)
-            {
-                ::Utils::Logger::log(std::string("MariaDB exception: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::hasBeenMatchBanned");
-                return std::nullopt;
-            }
-        }
-
-        std::optional<bool> PersistentDatabase::hasBeenMatchBannedByNick(const std::string& nickname)
-        {
-            try
-            {
-                std::string query = "SELECT SuspensionReason FROM Users WHERE Nickname = ?";
-                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(query));
-                stmt->setString(1, nickname);
-
-                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
-                if (res->next())
-                {
-                    std::string reason = res->getString(1).c_str();
-                    return reason == "AUTOMATIC_CHEAT_BAN" || reason == "AUTOMATIC_CHEAT_BAN_HWID";
-                }
-                else
-                {
-                    return false;
-                }
-            }
-            catch (const sql::SQLException& e)
-            {
-                ::Utils::Logger::log(std::string("MariaDB exception: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::hasBeenMatchBannedByNick");
-                return std::nullopt;
-            }
         }
 
         void PersistentDatabase::updateLatestRewardDay(const std::string& columnName, std::uint32_t accountId, const std::string& rewardDay)
@@ -3510,6 +3343,30 @@ namespace Main
             return true; 
         }
 
+        bool PersistentDatabase::getGradedHwid(std::uint32_t accountId, std::string& outHash, std::string& outSalt) const
+        {
+            try
+            {
+                std::string query = "SELECT HWIDGraded, HWIDGradedSalt FROM Users WHERE AccountID = ?";
+                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(query));
+                stmt->setUInt(1, accountId);
+
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
+                if (res->next())
+                {
+                    outHash = res->getString("HWIDGraded").c_str();
+                    outSalt = res->getString("HWIDGradedSalt").c_str();
+                    return true;
+                }
+
+                return false;
+            }
+            catch (const sql::SQLException& e)
+            {
+                ::Utils::Logger::log("MariaDB exception in getGradedHwid: " + std::string(e.what()), ::Utils::LogType::Error);
+                return false;
+            }
+        }
 
     } // end namespace Main
 } // end namespace Persistence

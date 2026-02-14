@@ -51,12 +51,6 @@ namespace Main
 			}
 			else if (Main::Classes::Room* room = roomsManager.getRoomByNumber(session->getPlayer().getRoomNumber()))
 			{
-				if (session->hasBeenMatchBanned())
-				{ 
-					session->closeSocket();
-					return;
-				}
-
 				Common::Network::Packet response;
 				response.setTcpHeader(request.getSession(), Common::Enums::NO_ENCRYPTION);
 				const Main::Structures::UniqueId selfUniqueId = session->getAccountInfo().uniqueId;

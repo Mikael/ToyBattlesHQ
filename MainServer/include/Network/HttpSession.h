@@ -48,7 +48,7 @@ namespace Main
                 {
                     auto decoded_token = jwt::decode(token);
                     auto verifier = jwt::verify().allow_algorithm(jwt::algorithm::hs256{ 
-                        "YOUR_SECRET_TOKEN_GOES_HERE"});
+                        Common::Utils::SetupParser::getInstance().getWebsiteSetup().jwtToken});
                     verifier.verify(decoded_token);
                     auto grade_claim = decoded_token.get_payload_claim("role");
                     int grade = grade_claim.as_integer();
@@ -287,10 +287,8 @@ namespace Main
 
             bool isOriginOk(const std::string& origin)
             {
-                const std::vector<std::string> allowedOrigins = {
-                    "YOUR_ALLOWED_ORIGINS_GO_HERE",
-                };
-
+                auto allowedOrigins = Common::Utils::SetupParser::getInstance().getWebsiteSetup().allowedOrigins;
+              
                 std::string normalizedOrigin = origin;
                 if (normalizedOrigin.back() == '/') {
                     normalizedOrigin.pop_back();
@@ -1291,8 +1289,6 @@ namespace Main
                             &Main::Persistence::PersistentDatabase::getBanInfoByNickname, targetIdentifier);
                         auto muteInfoOpt = m_scheduler.immediatePersist(std::source_location::current(), 
                             &Main::Persistence::PersistentDatabase::getMuteInfoByNickname, targetIdentifier);
-                        auto matchBannedOpt = m_scheduler.immediatePersist(std::source_location::current(), 
-                            &Main::Persistence::PersistentDatabase::hasBeenMatchBannedByNick, targetIdentifier);
                         auto roomCreationDisabledUntilOpt = m_scheduler.immediatePersist(std::source_location::current(), 
                             &Main::Persistence::PersistentDatabase::getRoomCreationDisabledUntil, targetIdentifier);
 
@@ -1306,13 +1302,7 @@ namespace Main
                         playerObj["MicroPoints"] = ainfo.microPoints;
                         playerObj["RockTotens"] = ainfo.rockTotens;
 
-                        if (matchBannedOpt && *matchBannedOpt)
-                        {
-                            playerObj["MatchBanned"] = true;
-                            playerObj["BanReason"] = "obvious cheating";
-                            playerObj["BannedUntil"] = "permanent";
-                        }
-                        else if (banInfoOpt && banInfoOpt->isBanned)
+                        if (banInfoOpt && banInfoOpt->isBanned)
                         {
                             playerObj["Banned"] = true;
                             playerObj["BanReason"] = banInfoOpt->reason;

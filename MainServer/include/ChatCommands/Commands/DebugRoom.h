@@ -139,9 +139,6 @@ namespace Main
 					auto muteInfoOpt = scheduler.immediatePersist(std::source_location::current(),
 						&Main::Persistence::PersistentDatabase::getMuteInfoByNickname,
 						m_targetPlayerName);
-					auto matchBannedOpt = scheduler.immediatePersist(std::source_location::current(),
-						&Main::Persistence::PersistentDatabase::hasBeenMatchBannedByNick,
-						m_targetPlayerName);
 					auto roomCreationDisabledUntilOpt = scheduler.immediatePersist(std::source_location::current(),
 						&Main::Persistence::PersistentDatabase::getRoomCreationDisabledUntil,
 						m_targetPlayerName);
@@ -159,13 +156,7 @@ namespace Main
 					session->sendMessage(" - MicroPoints: " + std::to_string(ainfo.microPoints));
 					session->sendMessage(" - RockTotens: " + std::to_string(ainfo.rockTotens));
 
-					if (matchBannedOpt && *matchBannedOpt)
-					{
-						session->sendMessage("This player is cheat banned. Ignore all their requests.", Main::Enums::TIP);
-						session->sendMessage(" - Banned Until (UTC): permanent");
-						session->sendMessage(" - Ban Reason: obvious cheating");
-					}
-					else if (banInfoOpt && banInfoOpt->isBanned)
+					if (banInfoOpt && banInfoOpt->isBanned)
 					{
 						session->sendMessage("This player is banned. More information: ", Main::Enums::TIP);
 						session->sendMessage(" - Ban Reason: " + banInfoOpt->reason);
@@ -197,8 +188,6 @@ namespace Main
 						m_targetPlayerName);
 					auto muteInfoOpt = scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::getMuteInfoByNickname,
 						m_targetPlayerName);
-					auto matchBannedOpt = scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::hasBeenMatchBannedByNick,
-						m_targetPlayerName);
 					auto roomCreationDisabledUntilOpt =
 						scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::getRoomCreationDisabledUntil,
 							m_targetPlayerName);
@@ -217,13 +206,7 @@ namespace Main
 						session->sendMessage(" - MicroPoints: " + std::to_string(ainfoOpt->first.microPoints));
 						session->sendMessage(" - RockTotens: " + std::to_string(ainfoOpt->first.rockTotens));
 
-						if (matchBannedOpt && *matchBannedOpt)
-						{
-							session->sendMessage("This player is cheat banned. Ignore all their requests.", Main::Enums::TIP);
-							session->sendMessage(" - Banned Until (UTC): permanent");
-							session->sendMessage(" - Ban Reason: obvious cheating");
-						}
-						else if (banInfoOpt && banInfoOpt->isBanned)
+						if (banInfoOpt && banInfoOpt->isBanned)
 						{
 							session->sendMessage("This player is banned. More information: ", Main::Enums::TIP);
 							session->sendMessage(" - Ban Reason: " + banInfoOpt->reason);

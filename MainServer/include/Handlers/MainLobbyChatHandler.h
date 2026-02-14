@@ -142,11 +142,10 @@ namespace Main
 		{
 			START_BENCHMARK
 
-			const bool hasBeenMatchBanned = session->hasBeenMatchBanned();
 			const auto& accountInfo = session->getAccountInfo();
 			Common::Network::Packet response;
 			response.setTcpHeader(request.getSession(), Common::Enums::NO_ENCRYPTION);
-			response.setCommand(316, hasBeenMatchBanned ? Main::Enums::ChatGrade::CHAT_TESTER : getChatGrade(static_cast<Common::Enums::PlayerGrade>(accountInfo.playerGrade)), 
+			response.setCommand(316, getChatGrade(static_cast<Common::Enums::PlayerGrade>(accountInfo.playerGrade)), 
 				request.getExtra(), request.getOption());
 
 			const char* originalMessage = reinterpret_cast<const char*>(request.getData());
@@ -157,19 +156,14 @@ namespace Main
 				&Main::Persistence::PersistentDatabase::logMessage, accountInfo.accountID, logMessage);
 
 
-			if (!hasBeenMatchBanned && executeCommon(request, session, sessionsManager, chatCommands, roomsManager, scheduler, accountInfo, response, mainSv))
+			if (executeCommon(request, session, sessionsManager, chatCommands, roomsManager, scheduler, accountInfo, response, mainSv))
 			{
 				return;
 			}
 
-			const char* cheaterMessage = "I suck at this game and that's why I'm a dirty cheater";
-
-			const char* messageToSend = hasBeenMatchBanned ? cheaterMessage : originalMessage;
-			std::size_t messageLength = hasBeenMatchBanned ? std::strlen(cheaterMessage) : request.getOption();
-
-			std::vector<std::uint8_t> responseData(Common::Constants::maxNicknameSize + messageLength);
+			std::vector<std::uint8_t> responseData(Common::Constants::maxNicknameSize + request.getOption());
 			std::copy(accountInfo.nickname, accountInfo.nickname + Common::Constants::maxNicknameSize, responseData.begin());
-			std::copy(messageToSend, messageToSend + messageLength, responseData.begin() + Common::Constants::maxNicknameSize);
+			std::copy(originalMessage, originalMessage + request.getOption(), responseData.begin() + Common::Constants::maxNicknameSize);
 			response.setData(responseData.data(), responseData.size());
 
 			if (request.getExtra() == Enums::ChatExtra::NORMAL)
@@ -190,11 +184,9 @@ namespace Main
 			Main::Command::ChatCommands& chatCommands, Main::Classes::RoomsManager& roomsManager,
 			Main::Persistence::MainScheduler& scheduler, Main::MainServer& mainSv)
 		{
-			const bool hasBeenMatchBanned = session->hasBeenMatchBanned();
 			const auto& accountInfo = session->getAccountInfo();
 			Common::Network::Packet response;
-			response.setCommand(316, hasBeenMatchBanned ? Main::Enums::ChatGrade::CHAT_TESTER
-				: getChatGrade(static_cast<Common::Enums::PlayerGrade>(accountInfo.playerGrade)), 
+			response.setCommand(316, getChatGrade(static_cast<Common::Enums::PlayerGrade>(accountInfo.playerGrade)), 
 				request.getExtra(), request.getOption());
 			response.setTcpHeader(request.getSession(), Common::Enums::NO_ENCRYPTION);
 
@@ -206,20 +198,15 @@ namespace Main
 			scheduler.addRepetitiveCallback(std::source_location::current(), accountInfo.accountID,
 				&Main::Persistence::PersistentDatabase::logMessage, accountInfo.accountID, logMessage);
 
-			if (!hasBeenMatchBanned && executeCommon(request, session, sessionsManager, chatCommands, roomsManager, scheduler, accountInfo, response, mainSv))
+			if (executeCommon(request, session, sessionsManager, chatCommands, roomsManager, scheduler, accountInfo, response, mainSv))
 			{
 				return;
 			}
 
 			const char* senderNickname = accountInfo.nickname;
-			const char* cheatMessage = "I suck at this game and that's why I'm a dirty cheater";
-
-			const char* messageToSend = hasBeenMatchBanned ? cheatMessage : originalMessage;
-			std::size_t messageLength = hasBeenMatchBanned ? std::strlen(cheatMessage) : request.getOption();
-
-			std::vector<std::uint8_t> responseData(Common::Constants::maxNicknameSize + messageLength);
+			std::vector<std::uint8_t> responseData(Common::Constants::maxNicknameSize + request.getOption());
 			std::copy(senderNickname, senderNickname + Common::Constants::maxNicknameSize, responseData.begin());
-			std::copy(messageToSend, messageToSend + messageLength, responseData.begin() + Common::Constants::maxNicknameSize);
+			std::copy(originalMessage, originalMessage + request.getOption(), responseData.begin() + Common::Constants::maxNicknameSize);
 			response.setData(responseData.data(), responseData.size());
 
 			if (request.getExtra() == Enums::ChatExtra::CLAN)

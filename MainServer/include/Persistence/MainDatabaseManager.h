@@ -31,6 +31,9 @@ namespace Main
 		private:
 			sql::Connection* m_con;
 
+			std::atomic<bool> m_running{ true };
+			std::thread m_pingThread;
+
 			using Item = Main::Structures::Item;
 			using BoughtItem = Main::Structures::BoughtItem;
 			using EquippedItem = Main::Structures::EquippedItem;
@@ -39,6 +42,7 @@ namespace Main
 		public:
 
 			PersistentDatabase();
+			void connectWithRetry();
 			void pingDatabase();
 			void reconnect();
 			void updatePlayerCurrencyByType(std::uint32_t accountID, std::uint32_t newAmount, Main::Enums::ItemCurrencyType currencyType);
@@ -94,9 +98,6 @@ namespace Main
 			bool removePlayerItem(std::uint32_t accountId, std::uint64_t itemNumber, const std::string& caller);
 			void updatePlayerLevel(std::uint32_t accountID, std::uint16_t level);
 			void updatePlayerExperience(std::uint32_t accountID, std::uint32_t exp);
-			bool updateHwid(std::uint32_t accountId, const std::string& hwid);
-			std::optional<bool> hasBeenMatchBanned(std::uint32_t accountId);
-			std::optional<bool> hasBeenMatchBannedByNick(const std::string& nickname);
 			bool updatePlayerName(std::uint32_t accountID, const char* name);
 			bool updateSuspension(const std::string& nickname, const std::string& until, const std::string& reason, std::uint32_t executorGrade);
 			void updateLatestRewardDay(const std::string& columnName, std::uint32_t accountId, const std::string& rewardDay);
@@ -268,6 +269,15 @@ namespace Main
 			bool setCommandEventExpirationHours(std::uint32_t hoursFromNow);
 
 			bool isCommandEventExpired();
+
+			bool getGradedHwid(std::uint32_t accountId, std::string& outHash, std::string& outSalt) const;
+
+			~PersistentDatabase()
+			{
+				m_running = false;
+				if (m_pingThread.joinable())
+					m_pingThread.join();
+			}
 		};
 	}
 }

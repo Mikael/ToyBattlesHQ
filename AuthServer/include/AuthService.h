@@ -14,10 +14,14 @@ namespace Auth
 	class AuthService
 	{
 	private:
-		Auth::Persistence::PersistentDatabase m_persistentDatabase;
+		Auth::Persistence::PersistentDatabase& m_persistentDatabase;
 		std::unordered_map<std::uint32_t, Auth::Structures::LoginWrongAttempts> m_badLoginAttempts; // [aid] [LoginWrongAttempts]
 
 	public:
+		AuthService(Auth::Persistence::PersistentDatabase& persistentDatabase) : m_persistentDatabase{ persistentDatabase }
+		{
+		}
+
 		std::expected<Auth::Structures::BasicAccountInfo, Auth::Enums::Login> login(const std::string& username, const std::string& password, const std::string& ip,
 			const std::string& hwid);
 
@@ -32,7 +36,6 @@ namespace Auth
 		std::uint32_t generateAccountKey() const;
 		bool isIpInSubnet(const asio::ip::network_v4& network, const asio::ip::address_v4& ip) const;
 		std::string generateRandomSalt(std::size_t length = 16) const;
-		std::string hashHwid(const std::string& hwid, const std::string& salt) const;
 	};
 }
 

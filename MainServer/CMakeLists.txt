@@ -16,6 +16,8 @@ add_executable(MainServer
     ${MAIN_HEADERS}
 )
 
+find_package(CURL REQUIRED)
+
 target_include_directories(MainServer
     PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/include
@@ -33,6 +35,11 @@ target_link_libraries(MainServer
         cryptopp::cryptopp
         range-v3::range-v3
         Boost::json
+        ${CURL_LIBRARIES}
+)
+
+target_include_directories(AuthServer PRIVATE
+    ${CURL_INCLUDE_DIRS}
 )
 
 if (WIN32)

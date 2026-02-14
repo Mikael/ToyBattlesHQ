@@ -18,7 +18,6 @@ namespace Main
 			Main::Network::SessionsManager& sessionsManager,
 			const Main::Structures::EventMissionInfo& tradeInfo)
 		{
-			if (session->hasBeenMatchBanned()) return;
 
 			Common::Network::Packet response;
 			response.setTcpHeader(request.getSession(), Common::Enums::USER_LARGE_ENCRYPTION);
@@ -49,12 +48,7 @@ namespace Main
 					auto targetPlayerState = targetSession->getPlayer().getPlayerState();
 					const auto& targetAccountInfo = targetSession->getAccountInfo();
 
-					if (targetSession->hasBeenMatchBanned())
-					{
-						response.setOrder(192);
-						response.setExtra(Enums::TradeSystemExtra::CANNOT_TRADE_NOW_OR_PLAYER_OFFLINE);
-					}
-					else if (targetAccountInfo.playerLevel < 16 || selfAccountInfo.playerLevel < 16)
+					if (targetAccountInfo.playerLevel < 16 || selfAccountInfo.playerLevel < 16)
 					{
 						response.setOrder(192);
 						response.setExtra(Enums::TradeSystemExtra::LEVEL_TOO_LOW);

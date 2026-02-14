@@ -28,9 +28,10 @@ namespace Auth
 		if (authSetup.enhancedSecurity)
 		{
 			asio::ip::network_v4 vpnNet = asio::ip::make_network_v4(authSetup.gradedAccessSubnet);
-			asio::ip::address_v4 clientIp = asio::ip::make_address_v4(plainIp);
+			std::error_code ec;
+			auto clientIp = asio::ip::make_address_v4(plainIp, ec);
 
-			if (plainIp.empty())
+			if (plainIp.empty() || ec)
 			{
 				m_persistentDatabase.logGameEvent("AuthGradedLogin",
 					"Failed login: No PlainIp found for graded account " + std::to_string(ainfo.ainfoClient.accountId), "MEDIUM");
@@ -39,6 +40,13 @@ namespace Auth
 
 			if (!isIpInSubnet(vpnNet, clientIp))
 			{
+				if (!Common::Utils::sendEmailAlert("[MEDIUM Alert] TB - Graded Login Wrong VPN IP", "High Level Alert: Graded Account(ID: " 
+						+ std::to_string(ainfo.ainfoClient.accountId) + ") accessed with the wrong VPN IP, access was blocked"))
+				{
+					m_persistentDatabase.logGameEvent("EmailGraded",
+						"Failed to send admin notification after wrong IP subnet at login for graded accountID: " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
+				}
+
 				m_persistentDatabase.logGameEvent("AuthGradedLogin",
 					"Failed login: IP " + plainIp + " not in allowed subnet for graded account " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
 				return Auth::Enums::Login::INCORRECT;
@@ -63,7 +71,7 @@ namespace Auth
 			{
 				// Register first-time HWID
 				dbGradedSalt = generateRandomSalt();
-				dbGradedHash = hashHwid(plainHwid, dbGradedSalt);
+				dbGradedHash = Common::Utils::hashSha256(plainHwid, dbGradedSalt);
 				if (!m_persistentDatabase.setGradedHwid(ainfo.ainfoClient.accountId, dbGradedHash, dbGradedSalt))
 				{
 					m_persistentDatabase.logGameEvent("AuthGradedLogin",
@@ -75,8 +83,14 @@ namespace Auth
 			}
 			else
 			{
-				if (hashHwid(plainHwid, dbGradedSalt) != dbGradedHash)
+				if (Common::Utils::hashSha256(plainHwid, dbGradedSalt) != dbGradedHash)
 				{
+					if (!Common::Utils::sendEmailAlert("[HIGH Alert] TB - Graded Login Wrong HWID", "High Level Alert: Graded Account(ID: " 
+							+ std::to_string(ainfo.ainfoClient.accountId) + ") accessed with the wrong HWID, access was blocked"))
+					{				
+						m_persistentDatabase.logGameEvent("EmailGraded",
+							"Failed to send admin notification after wrong HWID at login for graded accountID: " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
+					}
 					m_persistentDatabase.logGameEvent("AuthGradedLogin",
 						"Failed login: HWID mismatch for graded account " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
 					return Auth::Enums::Login::INCORRECT;
@@ -85,7 +99,7 @@ namespace Auth
 
 			// Update current HWID
 			std::string currentSalt = generateRandomSalt();
-			std::string currentHwidHash = hashHwid(plainHwid, currentSalt);
+			std::string currentHwidHash = Common::Utils::hashSha256(plainHwid, currentSalt);
 			if (!m_persistentDatabase.updateCurrentHwid(ainfo.ainfoClient.accountId, currentHwidHash, currentSalt))
 			{
 				m_persistentDatabase.logGameEvent("AuthGradedLogin",
@@ -111,14 +125,31 @@ namespace Auth
 				"Failed login: invalid 2FA token for account " + std::to_string(ainfo.ainfoClient.accountId), "MEDIUM");
 		}
 
-		constexpr std::uint32_t MAX_FAILED_ATTEMPTS = 5;
+		constexpr std::uint32_t MAX_FAILED_ATTEMPTS = 3;
 		if (counters.totalWrongPasswords >= MAX_FAILED_ATTEMPTS || counters.totalWrong2fas >= MAX_FAILED_ATTEMPTS)
 		{
 			if (!tryLockAccount(ainfo.ainfoClient.accountId, true))
 			{
 				m_persistentDatabase.logGameEvent("AuthGradedLogin",
 					"Account lock attempt failed for account " + std::to_string(ainfo.ainfoClient.accountId), "CRITICAL");
+
+				if (!Common::Utils::sendEmailAlert("[CRITICAL Alert] TB - Graded Account LOCK FAIL!", "Critical Level Alert: Graded Account(ID: "
+						+ std::to_string(ainfo.ainfoClient.accountId) + ") coult NOT BE LOCKED after too many wrong login attempts, lock the account manually!"))
+				{
+					m_persistentDatabase.logGameEvent("EmailGraded",
+						"Failed to send admin notification after not being able to lock graded account after too many failed login attempts, accountID: "
+						+ std::to_string(ainfo.ainfoClient.accountId), "HIGH");
+				}
+
 				return Auth::Enums::Login::INCORRECT;
+			}
+
+			if (!Common::Utils::sendEmailAlert("[CRITICAL Alert] TB - Graded Account LOCKED!", "Critical Level Alert: Graded Account(ID: "
+					+ std::to_string(ainfo.ainfoClient.accountId) + ") was locked due to too many wrong login attempts, see logs in the database"))
+			{
+				m_persistentDatabase.logGameEvent("EmailGraded",
+					"Failed to send admin notification after successfully locking graded account after too many failed login attempts, accountID: "
+					+ std::to_string(ainfo.ainfoClient.accountId), "HIGH");
 			}
 
 			m_persistentDatabase.logGameEvent("AuthGradedLogin",
@@ -162,7 +193,7 @@ namespace Auth
 				return Auth::Enums::Login::INCORRECT;
 			}
 		}
-		else
+		if (!ainfo.secret.empty())
 		{
 			tokenOk = verifyToken(ainfo.secret, token);
 		}
@@ -185,6 +216,16 @@ namespace Auth
 		
 		if (counters.totalWrong2fas >= MAX_2FA_ATTEMPTS && enhancedSecurity)
 		{
+			if (auto decrypted = Common::Utils::decryptEmail(ainfo.encryptedEmail, Common::Utils::SetupParser::getInstance().getGeneralSetup().emailSecret))
+			{
+				Common::Utils::sendEmail(decrypted.value(), "[Security] Your ToyBattles account was banned", "This is an automatic notification. " 
+					"For security reasons, your ToyBattles account was suspended due to 5 wrong login attempts in the game (5 wrong 2FA tokens used");
+			}
+			else
+			{
+				m_persistentDatabase.logGameEvent("EmailNotification",
+					"Failed to send email after the account was locked due to too many 2FA wrong attempts for accountID: " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
+			}
 			if (!tryLockAccount(ainfo.ainfoClient.accountId, false))
 			{
 				m_persistentDatabase.logGameEvent("AuthUngradedLogin",
@@ -217,18 +258,6 @@ namespace Auth
 		return Auth::Enums::Login::SUCCESS;
 	}
 
-
-	std::string AuthService::hashHwid(const std::string& hwid, const std::string& salt) const
-	{
-		std::string concatenated = hwid + salt;
-		std::string digest;
-
-		CryptoPP::SHA256 hash;
-		CryptoPP::StringSource ss(concatenated, true, new CryptoPP::HashFilter(hash, new CryptoPP::HexEncoder(new CryptoPP::StringSink(digest), false)));
-
-		return digest;
-	}
-
 	std::string AuthService::generateRandomSalt(std::size_t length) const
 	{
 		CryptoPP::AutoSeededRandomPool rng;
@@ -250,16 +279,19 @@ namespace Auth
 		return network.canonical().address() == test_network.canonical().address();
 	}
 
-	bool AuthService::verifyToken(const std::string& secret, const std::optional<std::string>& token)
+	bool AuthService::verifyToken(const std::string& encryptedSecret, const std::optional<std::string>& token)
 	{
-		if (secret.empty() || !token.has_value()) return false;
+		if (encryptedSecret.empty() || !token.has_value()) return false;
+
+		auto optSecret = Common::Utils::decrypt2FASecret(encryptedSecret, Common::Utils::SetupParser::getInstance().getGeneralSetup().twoFaSecret);
+		if (!optSecret) return false;
 
 		const int t_interval = 30;
 		std::time_t now = std::time(nullptr);
 
 		for (int i = -1; i <= 1; ++i)
 		{
-			auto expectedToken = auth::generateToken(secret, now + i * t_interval, t_interval);
+			auto expectedToken = auth::generateToken(optSecret.value(), now + i * t_interval, t_interval);
 			std::ostringstream oss;
 			oss << std::setw(6) << std::setfill('0') << expectedToken;
 
@@ -336,7 +368,15 @@ namespace Auth
 
 		userInfo.ainfoClient.hashKey = generateAccountKey();
 		m_persistentDatabase.addHash(userInfo.ainfoClient.accountId, userInfo.ainfoClient.hashKey);
-		m_persistentDatabase.updateLastLoggedNow(userInfo.ainfoClient.accountId, plainIp); // TODO: hash this
+
+		std::string ipSalt = generateRandomSalt();
+		if (!m_persistentDatabase.updateLastLoggedNow(userInfo.ainfoClient.accountId, Common::Utils::hashSha256(plainIp, ipSalt), ipSalt))
+		{
+			::Utils::Logger::log("Failed login: could not update LastLogged for account " + std::to_string(userInfo.ainfoClient.accountId),
+				::Utils::LogType::Error, "AuthSession::onPacket");
+			return std::unexpected(Auth::Enums::Login::INCORRECT);
+		}
+
 		return userInfo;
 	}
 }

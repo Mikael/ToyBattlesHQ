@@ -18,8 +18,6 @@ namespace Main
 		inline void handleTradeItemRemoval(const Common::Network::Packet& request, std::shared_ptr<Main::Network::Session>session,
 			Main::Network::SessionsManager& sessionsManager)
 		{
-			if (session->hasBeenMatchBanned()) return;
-
 			const Main::Structures::ItemSerialInfo itemSerialInfo = Main::Details::parseData<Main::Structures::ItemSerialInfo>(request, 8);
 
 			Common::Network::Packet response;

@@ -14,10 +14,17 @@ target_include_directories(AuthServer PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/include
 )
 
+find_package(CURL REQUIRED)
 target_link_libraries(AuthServer PUBLIC
     Common
     unofficial::mariadb-connector-cpp::mariadbcpp
+    ${CURL_LIBRARIES}
 )
+
+target_include_directories(AuthServer PRIVATE
+    ${CURL_INCLUDE_DIRS}
+)
+
 
 if (WIN32)
     target_link_libraries(AuthServer PUBLIC ws2_32 wsock32)

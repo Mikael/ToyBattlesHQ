@@ -28,7 +28,7 @@ namespace Auth
 		public:
 			PersistentDatabase();
 			void addHash(std::uint32_t accountID, std::uint32_t key);
-			bool updateLastLoggedNow(std::uint32_t aid, const std::string& ip);
+			bool updateLastLoggedNow(std::uint32_t aid, const std::string& ip, const std::string& salt);
 			bool logGameEvent(const std::string& logType, const std::string& message, const std::string& severity);
 
 			std::expected<Auth::Structures::BasicAccountInfo, Auth::Enums::Login> getCompletePlayerInfo(const std::string& username);

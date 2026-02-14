@@ -8,7 +8,6 @@
 #include <Utils/SetupParser.h>
 #include "Utils/Utils.h"
 
-using namespace CryptoPP;
 
 int main()
 {

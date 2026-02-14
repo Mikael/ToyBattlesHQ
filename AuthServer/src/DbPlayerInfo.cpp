@@ -58,25 +58,40 @@ namespace Auth
 			}
 		}
 
-		bool PersistentDatabase::updateLastLoggedNow(std::uint32_t aid, const std::string& ip)
+		bool PersistentDatabase::updateLastLoggedNow(std::uint32_t aid, const std::string& ipHash, const std::string& ipSalt)
 		{
 			try
 			{
+				bool columnExists = false;
+				std::string checkColumnQuery = "SHOW COLUMNS FROM Users LIKE 'LastIpSalt'";
+				std::unique_ptr<sql::PreparedStatement> checkStmt(con->prepareStatement(checkColumnQuery));
+				std::unique_ptr<sql::ResultSet> checkRes(checkStmt->executeQuery());
+
+				if (checkRes->next()) columnExists = true;
+
+				if (!columnExists) 
+				{
+					std::string alterQueryStr = "ALTER TABLE Users ADD COLUMN LastIpSalt VARCHAR(128) NULL";
+					std::unique_ptr<sql::PreparedStatement> alterStmt(con->prepareStatement(alterQueryStr));
+					alterStmt->executeUpdate();
+				}
 				auto now = std::chrono::utc_clock::now();
 				std::string currentUtcTime = std::format("{:%Y-%m-%d %H:%M:%S}", now);
 
-				std::string updateQueryStr = "UPDATE Users SET LastLogged = ?, LastIP = ? WHERE AccountID = ?";
-				std::unique_ptr<sql::PreparedStatement> stmt(con->prepareStatement(updateQueryStr));
+				std::string updateQueryStr = "UPDATE Users SET LastLogged = ?, LastIP = ?, LastIpSalt = ? WHERE AccountID = ?";
+				std::unique_ptr<sql::PreparedStatement> updateStmt(con->prepareStatement(updateQueryStr));
 
-				stmt->setString(1, currentUtcTime);
-				stmt->setString(2, ip);
-				stmt->setUInt(3, aid);
+				updateStmt->setString(1, currentUtcTime);
+				updateStmt->setString(2, ipHash);
+				updateStmt->setString(3, ipSalt);
+				updateStmt->setUInt(4, aid);
 
-				return stmt->executeUpdate() > 0;
+				int rowsAffected = updateStmt->executeUpdate();
+				return rowsAffected > 0;
 			}
 			catch (const sql::SQLException& e)
 			{
-				::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), ::Utils::LogType::Error, "PersistentDatabase::updateLastLoggedNow");
+				::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),::Utils::LogType::Error, "PersistentDatabase::updateLastLoggedNow");
 				return false;
 			}
 		}
@@ -138,6 +153,7 @@ namespace Auth
 				if (res->next())
 				{
 					playerInfoStructure.grade = static_cast<std::uint32_t>(res->getInt("Grade"));
+					playerInfoStructure.encryptedEmail = res->getString("Email").c_str();
 					playerInfoStructure.secret = res->getString("Secret").c_str();
 					playerInfoStructure.hashedPassword = res->getString("Password").c_str();
 					playerInfoStructure.suspendedUntil = res->getString("SuspendedUntil").c_str();
