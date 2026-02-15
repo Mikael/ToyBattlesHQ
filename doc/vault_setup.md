@@ -169,11 +169,6 @@ StartLimitBurst=3
 LimitMEMLOCK=infinity
 LimitNOFILE=65536
 
-PrivateTmp=yes
-ProtectSystem=full
-ProtectHome=read-only
-NoNewPrivileges=yes
-
 [Install]
 WantedBy=multi-user.target
 
@@ -244,6 +239,6 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
 
-// Then reload and enable
+// Finally: reload reload and enable
 sudo systemctl daemon-reload
 sudo systemctl enable vault-unseal.service
