@@ -56,11 +56,13 @@ namespace Main
                 {
                     ::Utils::Logger::log("Connecting to MariaDB (attempt " + std::to_string(attempt) + ")", Utils::LogType::Info, "PersistentDatabase");
 
-                    m_con = sql::mariadb::get_driver_instance()->connect("tcp://" + dbSetup.ip + ":" + std::to_string(dbSetup.port), dbSetup.username, dbSetup.password);
+                    m_con = std::unique_ptr<sql::Connection>(sql::mariadb::get_driver_instance()->connect("tcp://" + dbSetup.ip + ":" + std::to_string(dbSetup.port),
+                            dbSetup.username,dbSetup.password));                    
                     m_con->setSchema(dbSetup.databaseName);
                     m_con->setAutoCommit(true);
 
-                    m_transactionalCon = sql::mariadb::get_driver_instance()->connect("tcp://" + dbSetup.ip + ":" + std::to_string(dbSetup.port), dbSetup.username, dbSetup.password);
+                    m_transactionalCon = std::unique_ptr<sql::Connection>(sql::mariadb::get_driver_instance()->connect( "tcp://" + dbSetup.ip + ":" + std::to_string(dbSetup.port),
+                            dbSetup.username,dbSetup.password));     
                     m_transactionalCon->setSchema(dbSetup.databaseName);
                     m_transactionalCon->setAutoCommit(false);
 
@@ -83,6 +85,64 @@ namespace Main
             }
         }
 
+        void PersistentDatabase::recreateConnection(std::unique_ptr<sql::Connection>& conn, bool autoCommit)
+        {
+            const auto& dbSetup = Common::Utils::SetupParser::getInstance().getDatabaseSetup();
+
+            try {
+                conn.reset(sql::mariadb::get_driver_instance()->connect(
+                    "tcp://" + dbSetup.ip + ":" + std::to_string(dbSetup.port),
+                    dbSetup.username,
+                    dbSetup.password
+                ));
+                conn->setSchema(dbSetup.databaseName);
+                conn->setAutoCommit(autoCommit);
+
+                ::Utils::Logger::log("Connection recreated successfully (autoCommit=" +
+                    std::string(autoCommit ? "true" : "false") + ")",
+                    Utils::LogType::Info, "PersistentDatabase::recreateConnection");
+            }
+            catch (const sql::SQLException& e) {
+                ::Utils::Logger::log("Failed to recreate connection: " + std::string(e.what()),
+                    Utils::LogType::Error, "PersistentDatabase::recreateConnection");
+                throw; 
+            }
+        }
+
+        bool PersistentDatabase::isValidConnection(const std::unique_ptr<sql::Connection>& conn)
+        {
+            if (!conn) return false;
+
+            try {
+                if (conn->isClosed()) return false;
+
+                std::unique_ptr<sql::Statement> stmt(conn->createStatement());
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT 1"));
+
+                return true;
+            }
+            catch (const sql::SQLException& e) {
+                ::Utils::Logger::log("Connection validation failed: " + std::string(e.what()),Utils::LogType::Error, "PersistentDatabase::isValidConnection");
+                return false;
+            }
+            catch (...) {
+                return false;
+            }
+        }
+
+        void PersistentDatabase::ensureConnections()
+        {
+            if (!isValidConnection(m_con)) 
+            {
+                recreateConnection(m_con, true);  
+            }
+
+            if (!isValidConnection(m_transactionalCon)) 
+            {
+                recreateConnection(m_transactionalCon, false); 
+            }
+        }
+
         void PersistentDatabase::updatePlayerCurrencyByType(std::uint32_t accountID, std::uint32_t newAmount, Main::Enums::ItemCurrencyType currencyType)
         {
             try
@@ -102,6 +162,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updatePlayerCurrencyByType");
+                throw;
             }
         }
 
@@ -120,6 +181,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::addPlayerAchievement");
+                throw;
             }
         }
 
@@ -137,7 +199,8 @@ namespace Main
             }
             catch (const sql::SQLException& e)
             {
-                return;
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::logMessage");
+                throw;
             }
         }
 
@@ -164,6 +227,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getPlayerAchievements");
+                throw;
             }
 
             return achievements;
@@ -175,7 +239,7 @@ namespace Main
 
             try
             {
-                TransactionGuard guard(m_transactionalCon);
+                TransactionGuard guard(m_transactionalCon.get());
 
                 std::string selectSql = "SELECT TotalMission1, TotalMission2, TotalMission3, TotalMission4, TotalMission5 "
                     "FROM EventMissions WHERE AccountID = ?";
@@ -218,6 +282,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getPlayerMissions");
+                throw;
             }
 
             return missions;
@@ -227,7 +292,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard guard(m_transactionalCon);
+                TransactionGuard guard(m_transactionalCon.get());
 
                 const std::string query = "SELECT UNIX_TIMESTAMP(StartDate) AS StartTimestamp, "
                     "UNIX_TIMESTAMP(EndDate) AS EndTimestamp FROM " + tableName + " LIMIT 1";
@@ -255,6 +320,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getEventInfo (" + tableName + ")");
+                throw;
             }
 
             return std::nullopt;
@@ -264,7 +330,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard guard(m_transactionalCon);
+                TransactionGuard guard(m_transactionalCon.get());
 
                 const std::string query = R"(SELECT UNIX_TIMESTAMP(StartDate) AS StartTimestamp,UNIX_TIMESTAMP(EndDate) AS EndTimestamp,
                    NewMpPrice,NewRtPrice FROM CapsuleEvents LIMIT 1)";
@@ -298,6 +364,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::getCapsuleEvent");
+                throw;
             }
 
             return std::nullopt;
@@ -307,7 +374,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard txn(m_transactionalCon);
+                TransactionGuard txn(m_transactionalCon.get());
 
                 const std::string checkQuery = "SELECT COUNT(*) as Count FROM CapsuleEvents";
                 std::unique_ptr<sql::PreparedStatement> checkStmt(m_transactionalCon->prepareStatement(checkQuery));
@@ -349,7 +416,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error,"PersistentDatabase::updateCapsuleEvent");
-                return false; 
+                throw;
             }
         }
 
@@ -359,7 +426,7 @@ namespace Main
 
             try
             {
-                TransactionGuard txn(m_transactionalCon);
+                TransactionGuard txn(m_transactionalCon.get());
 
                 const std::string query = R"(INSERT INTO ItemLogs (AccountID, Date, ItemNumber, ItemID, Action, ExpirationDate) VALUES (?, NOW(), ?, ?, ?, ?))";
 
@@ -381,7 +448,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::insertItemLogs");
-                return false; 
+                throw;
             }
         }
 
@@ -404,6 +471,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::insertItemLog");
+                throw;
             }
 
             return false;
@@ -458,7 +526,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard txn(m_transactionalCon);
+                TransactionGuard txn(m_transactionalCon.get());
 
                 const std::string ensureRowQuery = "SELECT COUNT(*) AS RowCount FROM " + tableName;
                 std::unique_ptr<sql::PreparedStatement> checkStmt(m_transactionalCon->prepareStatement(ensureRowQuery));
@@ -487,6 +555,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::updateEventInfo (" + tableName + ")");
+                throw;
             }
 
             return false; 
@@ -497,7 +566,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard txn(m_transactionalCon);
+                TransactionGuard txn(m_transactionalCon.get());
 
                 const std::string query = R"(SELECT UNIX_TIMESTAMP(StartDate) AS StartTimestamp, UNIX_TIMESTAMP(EndDate) AS EndTimestamp,
                    ExpBonusPercent, MpBonusPercent FROM ExpMpBonusEvents LIMIT 1)";
@@ -526,7 +595,8 @@ namespace Main
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::getExpMpBonusInfo");
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::getExpMpBonusInfo");               
+                throw;
             }
 
             return std::nullopt;
@@ -536,7 +606,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard txn(m_transactionalCon);
+                TransactionGuard txn(m_transactionalCon.get());
 
                 const std::string checkQuery = R"(SELECT COUNT(*) AS RowCount FROM ExpMpBonusEvents)";
                 std::unique_ptr<sql::PreparedStatement> checkStmt(m_transactionalCon->prepareStatement(checkQuery));
@@ -581,6 +651,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::updateExpMpBonusInfo");
+                throw;
             }
 
             return false;
@@ -596,7 +667,7 @@ namespace Main
 
             try
             {
-                TransactionGuard txn(m_transactionalCon);
+                TransactionGuard txn(m_transactionalCon.get());
 
                 std::string checkSql = "SELECT COUNT(*) FROM EventMissions WHERE AccountID = ?";
                 std::unique_ptr<sql::PreparedStatement> checkStmt(m_transactionalCon->prepareStatement(checkSql));
@@ -637,7 +708,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error, "PersistentDatabase::updatePlayerMissionProgress");
-                return false;
+                throw;
             }
         }
 
@@ -651,7 +722,7 @@ namespace Main
 
             try
             {
-                TransactionGuard txn(m_transactionalCon);
+                TransactionGuard txn(m_transactionalCon.get());
 
                 std::string checkSql = "SELECT COUNT(*) FROM EventMissions WHERE AccountID = ?";
                 std::unique_ptr<sql::PreparedStatement> checkStmt(m_transactionalCon->prepareStatement(checkSql));
@@ -725,7 +796,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::savePlayerMissions");
-                return false;
+                throw;
             }
         }
 
@@ -742,6 +813,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateLatestSelectedCharacter");
+                throw;
             }
         }
 
@@ -761,7 +833,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), ::Utils::LogType::Error, "PersistentDatabase::logGameEvent");
-                return false;
+                throw;
             }
         }
 
@@ -846,7 +918,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getPlayerInfo");
-                return std::nullopt;
+                throw;
             }
 
             return playerInfoStructure;
@@ -875,7 +947,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::getLastLoggedByAccountId");
-                return std::nullopt;
+                throw;
             }
         }
 
@@ -893,7 +965,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::resetAccountKey");
-                return false;
+                throw;
             }
         }
 
@@ -930,7 +1002,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getPlayerInfoByNickname");
-                return std::nullopt;
+                throw;
             }
         }
 
@@ -964,7 +1036,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::isMuted");
-                return {}; 
+                throw;
             }
         }
 
@@ -998,7 +1070,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getMuteInfoByNickname");
-                return std::nullopt;
+                throw;
             }
         }
 
@@ -1031,7 +1103,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getBanInfoByNickname");
-                return std::nullopt;
+                throw;
             }
         }
 
@@ -1055,7 +1127,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getRoomCreationDisabledUntil");
-                return std::nullopt;
+                throw;
             }
         }
 
@@ -1080,7 +1152,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::isRoomCreationDisabled");
-                return false;
+                throw;
             }
         }
 
@@ -1103,7 +1175,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getVotekickDisabledUntil");
-                return std::nullopt;
+                throw;
             }
         }
 
@@ -1126,7 +1198,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::isVotekickDisabled");
-                return false;
+                throw;
             }
         }
 
@@ -1148,7 +1220,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::unbanPlayer");
-                return false;
+                throw;
             }
         }
 
@@ -1172,7 +1244,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::addPlayer");
-                return false;
+                throw;
             }
         }
 
@@ -1186,7 +1258,7 @@ namespace Main
 
             try
             {
-                TransactionGuard tx(m_transactionalCon);
+                TransactionGuard tx(m_transactionalCon.get());
 
                 const std::string queryStr = "SELECT * FROM UserItems WHERE AccountID = ?";
                 std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(queryStr));
@@ -1291,7 +1363,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getPlayerItems");
-                return {};
+                throw;
             }
 
             return std::pair{ std::move(nonEquippedItems), std::move(equippedItemsPerCharacter) };
@@ -1322,7 +1394,7 @@ namespace Main
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()) + " | AccountID: " + std::to_string(accountID) +
                     ", ItemNumber: " + std::to_string(itemNumber) + ", NewItemID: " + std::to_string(newItemId), 
                     Utils::LogType::Error, "PersistentDatabase::replaceItem");  
-                return false;
+                throw;
             }
         }
 
@@ -1355,7 +1427,7 @@ namespace Main
                     ", ItemNumber: " + std::to_string(itemNumber) +
                     ", NewItemID: " + std::to_string(newItemId),
                     Utils::LogType::Error, "PersistentDatabase::replaceItemResetEnergy");
-                return false;
+                throw;
             }
         }
 
@@ -1363,7 +1435,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard tx(m_transactionalCon);
+                TransactionGuard tx(m_transactionalCon.get());
 
                 const std::string queryStr =
                     "INSERT INTO UserItems (AccountID, IsEquipped, CharacterID, ItemID, ItemDuration, ItemNumber, ItemOrigin, acquisitionServerId, creationDate,"
@@ -1398,7 +1470,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::addPlayerItems");
-                return false;
+                throw;
             }
         }
 
@@ -1417,7 +1489,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateItemStock");
-                return false;
+                throw;
             }
         }
 
@@ -1426,7 +1498,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard tg(m_transactionalCon);
+                TransactionGuard tg(m_transactionalCon.get());
 
                 const std::string prolongItemQuery = "UPDATE UserItems SET ItemDuration = ?, ItemOrigin = ?, acquisitionServerId = ? "
                     "WHERE AccountID = ? AND ItemNumber = ?";
@@ -1456,6 +1528,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::prolongItems");
+                throw;
             }
         }
 
@@ -1484,7 +1557,7 @@ namespace Main
                     " | AccountID: " + std::to_string(accountId) +
                     ", ItemNumber: " + std::to_string(itemNumber),
                     Utils::LogType::Error, "PersistentDatabase::removePlayerItem");
-                return false;
+                throw;
             }
         }
 
@@ -1507,6 +1580,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log(std::string("MariaDB exception: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::updatePlayerLevel");
+                throw;
             }
         }
 
@@ -1529,6 +1603,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log(std::string("MariaDB exception: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::updatePlayerExperience");
+                throw;
             }
         }
 
@@ -1551,7 +1626,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log(std::string("MariaDB exception: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::updatePlayerName");
-                return false;
+                throw;
             }
             return true;
         }
@@ -1560,7 +1635,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard tg(m_transactionalCon);
+                TransactionGuard tg(m_transactionalCon.get());
 
                 std::string checkGradeQuery = "SELECT Grade FROM Users WHERE Nickname = ?";
                 std::unique_ptr<sql::PreparedStatement> checkStmt(m_transactionalCon->prepareStatement(checkGradeQuery));
@@ -1594,7 +1669,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log(std::string("MariaDB exception: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::updateSuspension");
-                return false;
+                throw;
             }
             return true;
         }
@@ -1618,6 +1693,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log(std::string("MariaDB exception: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::updateLatestRewardDay");
+                throw;
             }
         }
 
@@ -1643,7 +1719,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log(std::string("MariaDB exception: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::getLatestRewardDayFor");
-                return "";
+                throw;
             }
         }
 
@@ -1681,7 +1757,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::mustRewardsBeUpdated");
-                return false;
+                throw;
             }
         }
 
@@ -1692,7 +1768,7 @@ namespace Main
 
             try
             {
-                TransactionGuard tg(m_transactionalCon);
+                TransactionGuard tg(m_transactionalCon.get());
 
                 std::string countQueryStr = "SELECT COUNT(*) FROM " + tableName;
                 std::unique_ptr<sql::PreparedStatement> countStmt(m_transactionalCon->prepareStatement(countQueryStr));
@@ -1726,6 +1802,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateRewards");
+                throw;
             }
         }
 
@@ -1748,6 +1825,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateBattery");
+                throw;
             }
         }
 
@@ -1771,6 +1849,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateClanContribution");
+                throw;
             }
         }
 
@@ -1797,6 +1876,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateClanStats");
+                throw;
             }
         }
 
@@ -1804,7 +1884,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard tg(m_transactionalCon);
+                TransactionGuard tg(m_transactionalCon.get());
 
                 std::string updateQueryStr = "UPDATE UserItems SET Durability = ? WHERE AccountID = ? AND ItemNumber = ? AND ItemDuration = 0";
                 std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(updateQueryStr));
@@ -1833,6 +1913,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log(std::string("SQL Error: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::reduceDurability");
+                throw;
             }
         }
 
@@ -1853,6 +1934,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log(std::string("SQL Error: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::updateItemDurability");
+                throw;
             }
         }
 
@@ -1905,12 +1987,12 @@ namespace Main
                 if (stmt->executeUpdate() == 0)
                 {
                     ::Utils::Logger::log("Update failed.", Utils::LogType::Warning, "PersistentDatabase::updatePlayerStats");
-                    return;
                 }
             }
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updatePlayerStats");
+                throw;
             }
         }
 
@@ -1920,7 +2002,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard tg(m_transactionalCon);
+                TransactionGuard tg(m_transactionalCon.get());
 
                 std::string checkGradeQuery = "SELECT Grade FROM Users WHERE Nickname = ?";
                 std::unique_ptr<sql::PreparedStatement> checkStmt(m_transactionalCon->prepareStatement(checkGradeQuery));
@@ -1959,7 +2041,7 @@ namespace Main
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),
                     Utils::LogType::Error, "PersistentDatabase::updateMute");
-                return false;
+                throw;
             }
         }
 
@@ -1983,7 +2065,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateVotekickDisabledUntil");
-                return false;
+                throw;
             }
         }
 
@@ -1991,7 +2073,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard tg(m_transactionalCon);
+                TransactionGuard tg(m_transactionalCon.get());
 
                 std::string selectQueryStr = "SELECT AccountID FROM Users WHERE Nickname = ?";
                 std::unique_ptr<sql::PreparedStatement> selectStmt(m_transactionalCon->prepareStatement(selectQueryStr));
@@ -2019,7 +2101,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::resetVotekickDisabledUntil");
-                return false;
+                throw;
             }
         }
 
@@ -2043,7 +2125,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateRoomCreationDisabledUntil");
-                return false;
+                throw;
             }
         }
 
@@ -2051,7 +2133,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard tg(m_transactionalCon);
+                TransactionGuard tg(m_transactionalCon.get());
 
                 std::string selectQueryStr = "SELECT AccountID FROM Users WHERE Nickname = ?";
                 std::unique_ptr<sql::PreparedStatement> selectStmt(m_transactionalCon->prepareStatement(selectQueryStr));
@@ -2079,7 +2161,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::resetRoomCreationDisabledUntil");
-                return false;
+                throw;
             }
         }
 
@@ -2087,7 +2169,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard tg(m_transactionalCon);
+                TransactionGuard tg(m_transactionalCon.get());
 
                 std::string selectQueryStr = "SELECT AccountID FROM Users WHERE Nickname = ?";
                 std::unique_ptr<sql::PreparedStatement> selectStmt(m_transactionalCon->prepareStatement(selectQueryStr));
@@ -2115,7 +2197,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::unmuteAccount");
-                return false;
+                throw;
             }
         }
 
@@ -2140,6 +2222,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::switchItemEquip");
+                throw;
             }
         }
 
@@ -2162,6 +2245,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::unequipItem");
+                throw;
             }
         }
 
@@ -2185,6 +2269,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::equipItem");
+                throw;
             }
         }
 
@@ -2192,7 +2277,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard tg(m_transactionalCon);
+                TransactionGuard tg(m_transactionalCon.get());
 
                 std::string queryStr1 = "UPDATE UserItems SET IsEquipped = 1, CharacterID = ? WHERE AccountID = ? AND ItemNumber = ?";
                 std::unique_ptr<sql::PreparedStatement> stmt1(m_transactionalCon->prepareStatement(queryStr1));
@@ -2220,6 +2305,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::swapItems");
+                throw;
             }
         }
 
@@ -2227,7 +2313,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard tg(m_transactionalCon);
+                TransactionGuard tg(m_transactionalCon.get());
 
                 const std::string insertQuery = "INSERT IGNORE INTO Friendlist (AccountID, TargetAccountID) VALUES (?, ?)";
                 std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(insertQuery));
@@ -2251,6 +2337,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::addFriend");
+                throw;
             }
         }
 
@@ -2276,7 +2363,7 @@ namespace Main
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),
                     Utils::LogType::Error, "PersistentDatabase::resetKillDeath");
-                return false;
+                throw;
             }
         }
 
@@ -2300,7 +2387,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error, "PersistentDatabase::resetRecord");
-                return false;
+                throw;
             }
         }
 
@@ -2313,7 +2400,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard tg(m_transactionalCon);
+                TransactionGuard tg(m_transactionalCon.get());
 
                 const std::string getBattery = "SELECT Battery FROM Users WHERE AccountID = ?";
                 const std::string updateBattery = "UPDATE Users SET Battery = ? WHERE AccountID = ?";
@@ -2344,7 +2431,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::batteryRecharge");
-                return false;
+                throw;
             }
         }
 
@@ -2352,7 +2439,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard tg(m_transactionalCon);
+                TransactionGuard tg(m_transactionalCon.get());
 
                 const std::string getMaxBattery = "SELECT MaxBattery FROM Users WHERE AccountID = ?";
                 const std::string updateMaxBattery = "UPDATE Users SET MaxBattery = ? WHERE AccountID = ?";
@@ -2389,7 +2476,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::batteryExpansion");
-                return false;
+                throw;
             }
         }
 
@@ -2397,7 +2484,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard tg(m_transactionalCon);
+                TransactionGuard tg(m_transactionalCon.get());
 
                 const std::string getMaxInventory = "SELECT MaxInventory FROM Users WHERE AccountID = ?";
                 const std::string updateMaxInventory = "UPDATE Users SET MaxInventory = ? WHERE AccountID = ?";
@@ -2435,7 +2522,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::inventoryExpansion");
-                return false;
+                throw;
             }
         }
 
@@ -2461,6 +2548,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::removeFriend");
+                throw;
             }
         }
 
@@ -2494,7 +2582,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::loadFriends");
-                return {};
+                throw;
             }
 
             return friendList;
@@ -2531,7 +2619,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::loadBlockedPlayers");
-                return {};
+                throw;
             }
 
             return blockedList;
@@ -2554,6 +2642,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::blockPlayer");
+                throw;
             }
         }
 
@@ -2561,7 +2650,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard tg(m_transactionalCon);
+                TransactionGuard tg(m_transactionalCon.get());
 
                 std::unique_ptr<sql::PreparedStatement> stmtFind(m_transactionalCon->prepareStatement(
                     "SELECT AccountID, Grade FROM Users WHERE Nickname = ?"));
@@ -2591,7 +2680,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::blockPlayerByNickname");
-                return std::nullopt;
+                throw;
             }
         }
 
@@ -2612,16 +2701,15 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::unblockPlayer");
+                throw;
             }
         }
 
-        Main::Enums::AddFriendServerExtra PersistentDatabase::addPendingFriendRequest(
-            std::uint32_t aid,
-            const char* targetName)
+        Main::Enums::AddFriendServerExtra PersistentDatabase::addPendingFriendRequest(std::uint32_t aid, const char* targetName)
         {
             try
             {
-                TransactionGuard tx(m_transactionalCon);
+                TransactionGuard tx(m_transactionalCon.get());
 
                 std::uint32_t targetAid = 0;
 
@@ -2676,8 +2764,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::addPendingFriendRequest");
-
-                return Main::Enums::AddFriendServerExtra::DB_ERROR;
+                throw;
             }
         }
 
@@ -2687,7 +2774,7 @@ namespace Main
 
             try
             {
-                TransactionGuard tx(m_transactionalCon);
+                TransactionGuard tx(m_transactionalCon.get());
 
                 std::unique_ptr<sql::PreparedStatement> stmt(
                     m_transactionalCon->prepareStatement("SELECT PendingFriendRequests.*, Users.Nickname AS TargetNickname "
@@ -2720,6 +2807,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::loadPendingFriendRequests");
+                throw;
             }
 
             return pendingFriendRequests;
@@ -2727,68 +2815,84 @@ namespace Main
 
         std::vector<Main::Structures::SingleModeEvent> PersistentDatabase::getEventsModeList()
         {
-            std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement("SELECT * FROM EventsModes"));
-            std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
-
-            std::vector<Main::Structures::SingleModeEvent> events;
-            Main::Structures::SingleModeEvent singleEvent;
-
-            while (res->next())
+            try
             {
-                singleEvent.gameMode = static_cast<Common::Enums::GameModes>(res->getInt("GameMode"));
+                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement("SELECT * FROM EventsModes"));
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
-                const std::string startDateStr = res->getString("StartDate").c_str();
-                const std::string endDateStr = res->getString("EndDate").c_str();
+                std::vector<Main::Structures::SingleModeEvent> events;
+                Main::Structures::SingleModeEvent singleEvent;
 
-                std::tm startTm = {};
-                std::tm endTm = {};
+                while (res->next())
+                {
+                    singleEvent.gameMode = static_cast<Common::Enums::GameModes>(res->getInt("GameMode"));
 
-                std::istringstream(startDateStr) >> std::get_time(&startTm, "%Y-%m-%d %H:%M:%S");
-                std::istringstream(endDateStr) >> std::get_time(&endTm, "%Y-%m-%d %H:%M:%S");
+                    const std::string startDateStr = res->getString("StartDate").c_str();
+                    const std::string endDateStr = res->getString("EndDate").c_str();
 
-                auto startTimePoint = std::chrono::system_clock::from_time_t(std::mktime(&startTm));
-                auto endTimePoint = std::chrono::system_clock::from_time_t(std::mktime(&endTm));
+                    std::tm startTm = {};
+                    std::tm endTm = {};
 
-                singleEvent.startDate = static_cast<__time32_t>(std::chrono::system_clock::to_time_t(startTimePoint));
-                singleEvent.endDate = static_cast<__time32_t>(std::chrono::system_clock::to_time_t(endTimePoint));
+                    std::istringstream(startDateStr) >> std::get_time(&startTm, "%Y-%m-%d %H:%M:%S");
+                    std::istringstream(endDateStr) >> std::get_time(&endTm, "%Y-%m-%d %H:%M:%S");
 
-                events.push_back(singleEvent);
+                    auto startTimePoint = std::chrono::system_clock::from_time_t(std::mktime(&startTm));
+                    auto endTimePoint = std::chrono::system_clock::from_time_t(std::mktime(&endTm));
+
+                    singleEvent.startDate = static_cast<__time32_t>(std::chrono::system_clock::to_time_t(startTimePoint));
+                    singleEvent.endDate = static_cast<__time32_t>(std::chrono::system_clock::to_time_t(endTimePoint));
+
+                    events.push_back(singleEvent);
+                }
+
+                return events;
             }
-
-            return events;
+            catch (const sql::SQLException& e)
+            {
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getEventsModeList");
+                throw;
+            }
         }
 
         std::vector<Main::Structures::SingleMapEvent> PersistentDatabase::getEventsMapList()
         {
-            std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement("SELECT * FROM EventsMaps"));
-            std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
-
-            std::vector<Main::Structures::SingleMapEvent> events;
-            Main::Structures::SingleMapEvent singleEvent;
-
-            while (res->next())
+            try
             {
-                singleEvent.gameMap = static_cast<Common::Enums::GameMaps>(res->getInt("GameMap"));
+                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement("SELECT * FROM EventsMaps"));
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
-                const std::string startDateStr = res->getString("StartDate").c_str();
-                const std::string endDateStr = res->getString("EndDate").c_str();
+                std::vector<Main::Structures::SingleMapEvent> events;
+                Main::Structures::SingleMapEvent singleEvent;
 
-                std::tm startTm = {};
-                std::tm endTm = {};
+                while (res->next())
+                {
+                    singleEvent.gameMap = static_cast<Common::Enums::GameMaps>(res->getInt("GameMap"));
 
-                std::istringstream(startDateStr) >> std::get_time(&startTm, "%Y-%m-%d %H:%M:%S");
-                std::istringstream(endDateStr) >> std::get_time(&endTm, "%Y-%m-%d %H:%M:%S");
+                    const std::string startDateStr = res->getString("StartDate").c_str();
+                    const std::string endDateStr = res->getString("EndDate").c_str();
 
-                auto startTimePoint = std::chrono::system_clock::from_time_t(std::mktime(&startTm));
-                auto endTimePoint = std::chrono::system_clock::from_time_t(std::mktime(&endTm));
+                    std::tm startTm = {};
+                    std::tm endTm = {};
 
-                singleEvent.startDate = static_cast<__time32_t>(std::chrono::system_clock::to_time_t(startTimePoint));
-                singleEvent.endDate = static_cast<__time32_t>(std::chrono::system_clock::to_time_t(endTimePoint));
+                    std::istringstream(startDateStr) >> std::get_time(&startTm, "%Y-%m-%d %H:%M:%S");
+                    std::istringstream(endDateStr) >> std::get_time(&endTm, "%Y-%m-%d %H:%M:%S");
 
-                events.push_back(singleEvent);
+                    auto startTimePoint = std::chrono::system_clock::from_time_t(std::mktime(&startTm));
+                    auto endTimePoint = std::chrono::system_clock::from_time_t(std::mktime(&endTm));
+
+                    singleEvent.startDate = static_cast<__time32_t>(std::chrono::system_clock::to_time_t(startTimePoint));
+                    singleEvent.endDate = static_cast<__time32_t>(std::chrono::system_clock::to_time_t(endTimePoint));
+
+                    events.push_back(singleEvent);
+                }
+
+                return events;
             }
-
-            return events;
+            catch (const sql::SQLException& e)
+            {
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getEventsMapList");
+                throw;
+            }
         }
 
         void PersistentDatabase::storeMailbox(const Main::Structures::Mailbox& mailbox, std::uint32_t accountId, bool isSent)
@@ -2813,6 +2917,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::storeMailbox");
+                throw;
             }
         }
 
@@ -2839,7 +2944,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::storeGiftbox");
-                return false;
+                throw;
             }
         }
 
@@ -2847,7 +2952,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard tx(m_transactionalCon);
+                TransactionGuard tx(m_transactionalCon.get());
 
                 const std::string retrieveAccountIdQuery = "SELECT AccountID FROM Users WHERE Nickname = ? FOR UPDATE";
                 std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(retrieveAccountIdQuery));
@@ -2902,7 +3007,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::storeGiftbox");
-                return false;
+                throw;
             }
         }
        
@@ -2910,7 +3015,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard tx(m_transactionalCon);
+                TransactionGuard tx(m_transactionalCon.get());
 
                 std::uint32_t accountId = 0;
                 const std::string retrieveAccountIdQuery = "SELECT AccountID FROM Users WHERE Nickname = ? FOR UPDATE";
@@ -2974,7 +3079,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::storeOfflineMailbox");
-                return Main::Enums::MailboxExtra::MAILBOX_DB_ERROR;
+                throw;
             }
         }
 
@@ -3003,6 +3108,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getNewMailboxes");
+                throw;
             }
 
             return mailboxes;
@@ -3025,6 +3131,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateReadMailbox");
+                throw;
             }
         }
 
@@ -3047,6 +3154,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::deleteMailbox");
+                throw;
             }
         }
 
@@ -3068,11 +3176,11 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::deleteReceivedGiftbox");
+                throw;
             }
         }
 
-        std::pair<std::vector<Main::Structures::Mailbox>, std::vector<Main::Structures::Mailbox>>
-            PersistentDatabase::loadMailboxes(std::uint32_t accountID)
+        std::pair<std::vector<Main::Structures::Mailbox>, std::vector<Main::Structures::Mailbox>> PersistentDatabase::loadMailboxes(std::uint32_t accountID)
         {
             std::vector<Main::Structures::Mailbox> sentMailboxes;
             std::vector<Main::Structures::Mailbox> receivedMailboxes;
@@ -3111,7 +3219,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::loadMailboxes");
-                return {};
+                throw;
             }
 
             return { sentMailboxes, receivedMailboxes };
@@ -3150,7 +3258,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::loadReceivedGiftboxes");
-                return {};
+                throw;
             }
             return giftboxes;
         }
@@ -3159,7 +3267,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard tx(m_transactionalCon);
+                TransactionGuard tx(m_transactionalCon.get());
 
                 const std::string setEnergyForItem = "UPDATE UserItems SET energy = ? WHERE AccountID = ? AND ItemNumber = ?";
                 std::unique_ptr<sql::PreparedStatement> stmt1(m_transactionalCon->prepareStatement(setEnergyForItem));
@@ -3186,6 +3294,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::insertEnergyToItem");
+                throw;
             }
         }
 
@@ -3208,6 +3317,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updatePlayerLuckyPoints");
+                throw;
             }
         }
 
@@ -3215,7 +3325,7 @@ namespace Main
         {
             try
             {
-                TransactionGuard tx(m_transactionalCon);
+                TransactionGuard tx(m_transactionalCon.get());
 
                 auto now = std::chrono::system_clock::now();
                 auto expirationTime = now + std::chrono::hours(hoursFromNow);
@@ -3244,7 +3354,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::setCommandEventExpirationHours");
-                return false;
+                throw;
             }
         }
 
@@ -3262,6 +3372,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::isEventExpired");
+                throw;
             }
 
             return true; 
@@ -3288,7 +3399,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception in getGradedHwid: " + std::string(e.what()), ::Utils::LogType::Error);
-                return false;
+                throw;
             }
         }
 

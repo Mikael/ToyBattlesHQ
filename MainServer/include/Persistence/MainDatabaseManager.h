@@ -29,8 +29,8 @@ namespace Main
 		class PersistentDatabase
 		{
 		private:
-			sql::Connection* m_con; // only for functions that need autocommit=true (already atomic)
-			sql::Connection* m_transactionalCon; // only for functions that need autocommit=false (manual management)
+			std::unique_ptr<sql::Connection> m_con; // only for functions that need autocommit=true (already atomic)
+			std::unique_ptr<sql::Connection> m_transactionalCon; // only for functions that need autocommit=false (manual management)
 
 			std::atomic<bool> m_running{ true };
 			std::thread m_pingThread;
@@ -40,11 +40,14 @@ namespace Main
 			using EquippedItem = Main::Structures::EquippedItem;
 			using DetailedEquippedItem = Main::Structures::DetailedEquippedItem;
 
-		public:
-
-			PersistentDatabase();
-			void initialize();
 			void connectWithRetry();
+			void initialize();
+			void recreateConnection(std::unique_ptr<sql::Connection>& conn, bool autoCommit);
+			bool isValidConnection(const std::unique_ptr<sql::Connection>& conn);
+
+		public:
+			PersistentDatabase();
+			void ensureConnections();
 			void updatePlayerCurrencyByType(std::uint32_t accountID, std::uint32_t newAmount, Main::Enums::ItemCurrencyType currencyType);
 			void addPlayerAchievement(std::uint32_t accountID, std::uint32_t achievementIndex);
 			void logMessage(std::uint32_t accountID, const std::string& message);

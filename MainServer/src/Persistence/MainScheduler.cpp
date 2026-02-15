@@ -32,54 +32,68 @@ namespace Main
             }
         }
 
-        void  MainScheduler::schedulerLoop()
+        void MainScheduler::schedulerLoop()
         {
-            while (!m_stopRequested)
+            try
             {
-                std::this_thread::sleep_for(std::chrono::seconds(m_wakeupFrequency));
-                persist();
+                while (!m_stopRequested)
+                {
+                    std::this_thread::sleep_for(std::chrono::seconds(m_wakeupFrequency));
+                    persist();
+                }
+            }
+            catch (const std::exception& e)
+            {
+                ::Utils::Logger::log("Fatal database failure in scheduler: " + std::string(e.what()), Utils::LogType::Error,"MainScheduler::schedulerLoop");
+                std::terminate(); 
             }
         }
 
-        void  MainScheduler::persist()
+        void MainScheduler::persist()
         {
-            std::unique_lock<std::mutex> lock(m_callbacksMutex);
-            for (const auto& [accountId, callbacks] : m_databaseCallbacksIncremental)
+            std::unordered_map<std::uint32_t, std::map<std::size_t, std::function<void()>>> incremental;
+            std::unordered_map<std::uint32_t, std::map<std::size_t, std::function<void()>>> normal;
+
             {
-                for (const auto& [updateType, callback] : callbacks)
-                {
-                    callback();
-                }
+                std::unique_lock<std::mutex> lock(m_callbacksMutex);
+
+                incremental = std::move(m_databaseCallbacksIncremental);
+                normal = std::move(m_databaseCallbacks);
+
+                m_incrementalDifferentiationKey = 0;
+                m_databaseCallbacks.clear();
+                m_databaseCallbacksIncremental.clear();
             }
 
-            for (const auto& [accountId, callbacks] : m_databaseCallbacks)
-            {
+            for (const auto& [accountId, callbacks] : incremental)
                 for (const auto& [updateType, callback] : callbacks)
-                {
                     callback();
-                }
-            }
 
-            m_databaseCallbacks.clear();
-            m_databaseCallbacksIncremental.clear();
-            m_incrementalDifferentiationKey = 0;
+            for (const auto& [accountId, callbacks] : normal)
+                for (const auto& [updateType, callback] : callbacks)
+                    callback();
         }
 
         void MainScheduler::persistFor(std::uint32_t accountId)
         {
-            std::unique_lock<std::mutex> lock(m_callbacksMutex);
-            for (const auto& [updateType, callback] : m_databaseCallbacksIncremental[accountId])
+            std::map<std::size_t, std::function<void()>> incremental;
+            std::map<std::size_t, std::function<void()>> normal;
+
             {
-                callback();
+                std::unique_lock<std::mutex> lock(m_callbacksMutex);
+
+                incremental = std::move(m_databaseCallbacksIncremental[accountId]);
+                normal = std::move(m_databaseCallbacks[accountId]);
+
+                m_databaseCallbacks.erase(accountId);
+                m_databaseCallbacksIncremental.erase(accountId);
             }
 
-            for (const auto& [updateType, callback] : m_databaseCallbacks[accountId])
-            {
+            for (const auto& [updateType, callback] : incremental)
                 callback();
-            }
 
-            m_databaseCallbacks.erase(accountId);
-            m_databaseCallbacksIncremental.erase(accountId);
+            for (const auto& [updateType, callback] : normal)
+                callback();
         }
     };
 }

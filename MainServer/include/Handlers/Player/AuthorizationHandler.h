@@ -19,7 +19,7 @@ namespace Main
         
         inline bool securityLog(Main::Persistence::MainScheduler& scheduler, std::uint32_t accountGrade, const std::string& message, const std::string& severity)
         {
-            scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::logGameEvent,
+            return scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::logGameEvent,
                 accountGrade >= 3 ? "MainAuthGraded" : "MainAuthUngraded", message, severity);
         }
 
