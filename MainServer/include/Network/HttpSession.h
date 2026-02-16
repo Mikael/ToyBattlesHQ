@@ -1510,8 +1510,8 @@ namespace Main
                         return;
                     }
 
-                    std::uint32_t newCapsuleEventStartDate = obj["newCapsuleEventStartDate"].as_uint64();
-                    std::uint32_t newCapsuleEventEndDate = obj["newCapsuleEventEndDate"].as_uint64();
+                    std::uint64_t newCapsuleEventStartDate = obj["newCapsuleEventStartDate"].as_uint64();
+                    std::uint64_t newCapsuleEventEndDate = obj["newCapsuleEventEndDate"].as_uint64();
                     std::uint32_t newMpPrice = obj["newMpPrice"].as_uint64();
                     std::uint32_t newRtPrice = obj["newRtPrice"].as_uint64();
 
@@ -1702,8 +1702,8 @@ namespace Main
                         return;
                     }
 
-                    std::uint32_t newExpMpBonusStartDate = obj["newExpMpBonusStartDate"].as_uint64();
-                    std::uint32_t newExpMpBonusEndDate = obj["newExpMpBonusEndDate"].as_uint64();
+                    std::uint64_t newExpMpBonusStartDate = obj["newExpMpBonusStartDate"].as_uint64();
+                    std::uint64_t newExpMpBonusEndDate = obj["newExpMpBonusEndDate"].as_uint64();
                     std::uint32_t newExpBonusPercent = obj["newExpBonusPercent"].as_uint64();
                     std::uint32_t newMpBonusPercent = obj["newMpBonusPercent"].as_uint64();
 

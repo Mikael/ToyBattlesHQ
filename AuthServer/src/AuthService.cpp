@@ -166,11 +166,11 @@ namespace Auth
 
 		m_badLoginAttempts.erase(ainfo.ainfoClient.accountId);
 
-		const std::string currentTime = std::format("{:%Y-%m-%d %X}", std::chrono::utc_clock::now());
-		if (ainfo.suspendedUntil > currentTime)
+		std::uint64_t currentEpoch = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+		std::uint64_t suspendedUntilEpoch = Common::Utils::datetimeToEpoch(ainfo.suspendedUntil);
+		if (suspendedUntilEpoch > currentEpoch)
 		{
-			m_persistentDatabase.logGameEvent("AuthGradedLogin",
-				"Login attempt on suspended account " + std::to_string(ainfo.ainfoClient.accountId), "MEDIUM");
+			m_persistentDatabase.logGameEvent("AuthGradedLogin","Login attempt on suspended account " + std::to_string(ainfo.ainfoClient.accountId),"MEDIUM");
 			return Auth::Enums::Login::SUSPENDED;
 		}
 
@@ -247,14 +247,13 @@ namespace Auth
 
 		m_badLoginAttempts.erase(ainfo.ainfoClient.accountId);
 
-		const std::string currentTime = std::format("{:%Y-%m-%d %X}", std::chrono::utc_clock::now());
-		if (ainfo.suspendedUntil > currentTime)
+		std::uint64_t currentEpoch = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+		std::uint64_t suspendedUntilEpoch = Common::Utils::datetimeToEpoch(ainfo.suspendedUntil);
+		if (suspendedUntilEpoch > currentEpoch)
 		{
-			m_persistentDatabase.logGameEvent("AuthUngradedLogin",
-				"Login attempt on suspended ungraded account " + std::to_string(ainfo.ainfoClient.accountId), "LOW");
+			m_persistentDatabase.logGameEvent("AuthUngradedLogin","Login attempt on suspended ungraded account " + std::to_string(ainfo.ainfoClient.accountId),"LOW");
 			return Auth::Enums::Login::SUSPENDED;
 		}
-
 		return Auth::Enums::Login::SUCCESS;
 	}
 

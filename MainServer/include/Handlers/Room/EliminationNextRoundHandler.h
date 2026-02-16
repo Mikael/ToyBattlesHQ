@@ -300,7 +300,7 @@ namespace Main
 					auto finalGainedExp = gainedExp + (gainedExp * totalExpBonus / 100);
 					auto finalGainedMp = gainedMp + (gainedMp * totalMpBonus / 100);
 
-					std::uint32_t now = static_cast<std::uint32_t>(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+					const std::uint64_t now = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
 					auto mode = room->getRoomSettings().mode;
 					std::uint32_t finalGainedExpWithEvent = mode == Common::Enums::FreeForAll ? (finalGainedExp / 1.3) : finalGainedExp;
 					std::uint32_t finalGainedMpWithEvent = mode == Common::Enums::FreeForAll ? (finalGainedMp / 1.3) : finalGainedMp;

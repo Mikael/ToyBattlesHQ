@@ -88,6 +88,13 @@ namespace Common
 		{
 			if (!error)
 			{
+				if (m_reader.size() + bytes_transferred > 65536)
+				{
+					std::printf("Session::onRead() - Buffer overflow detected, closing connection\n");
+					closeSocket();
+					return;
+				}
+
 				const constexpr int headerSize = sizeof(Common::Protocol::TcpHeader);
 				m_reader.insert(m_reader.end(), m_buffer.begin(), m_buffer.begin() + bytes_transferred);
 

@@ -82,11 +82,9 @@ namespace Main
 				return (remove >= balance) ? 0u : balance - remove;
 				};
 
-			const std::uint32_t now = static_cast<std::uint32_t>(
-				std::chrono::system_clock::to_time_t(std::chrono::system_clock::now())
-				);
-			const bool inSalePeriod = (now >= capsuleSaleEvent.saleEventStartDate &&
-				now <= capsuleSaleEvent.saleEventEndDate);
+			const std::uint64_t now = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+
+			const bool inSalePeriod = (now >= capsuleSaleEvent.saleEventStartDate && now <= capsuleSaleEvent.saleEventEndDate);
 
 			switch (capsuleCurrencyType)
 			{
@@ -126,8 +124,7 @@ namespace Main
 				const auto& accountInfo = session->getAccountInfo();
 				const auto totalSpins = request.getOption();
 
-				// check if enough currency + sales
-				const std::uint32_t now = static_cast<std::uint32_t>(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+				const std::uint64_t now = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
 				const bool inSalePeriod = (now >= capsuleSaleEvent.saleEventStartDate && now <= capsuleSaleEvent.saleEventEndDate);
 				std::uint32_t pricePerSpin = capsuleInfo->gi_price;
 

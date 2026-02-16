@@ -106,7 +106,7 @@ namespace Main
 			if (res == Main::Enums::MailboxExtra::MAILBOX_SENT)
 			{
 				mailbox.accountId = m_player.getAccountInfo().accountID;
-				std::memcpy(mailbox.nickname, mailbox.nickname, Common::Constants::maxNicknameSize);
+				std::memcpy(mailbox.nickname, m_player.getAccountInfo().nickname, Common::Constants::maxNicknameSize);
 				addMailboxSent(mailbox);
 			}
 			else if (res == Main::Enums::MailboxExtra::MAILBOX_DB_ERROR)

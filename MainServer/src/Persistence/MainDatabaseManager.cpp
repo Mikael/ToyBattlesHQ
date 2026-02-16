@@ -19,6 +19,7 @@
 #include <mariadb/conncpp/Connection.hpp>
 #include "Utils/SetupParser.h"
 #include <cstring> 
+#include <Utils.h>
 
 namespace Main
 {
@@ -294,36 +295,41 @@ namespace Main
             {
                 TransactionGuard guard(m_transactionalCon.get());
 
-                const std::string query = "SELECT UNIX_TIMESTAMP(StartDate) AS StartTimestamp, "
-                    "UNIX_TIMESTAMP(EndDate) AS EndTimestamp FROM " + tableName + " LIMIT 1";
+                const std::string query = "SELECT StartDate, EndDate FROM " + tableName + " LIMIT 1";
                 std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(query));
                 std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
                 if (res->next())
                 {
                     Main::Structures::EventMissionInfo info;
-                    info.startDate = res->getUInt("StartTimestamp");
-                    info.endDate = res->getUInt("EndTimestamp");
+
+                    std::string startDateStr = res->getString("StartDate").c_str();
+                    std::string endDateStr = res->getString("EndDate").c_str();
+
+                    info.startDate = Common::Utils::datetimeToEpoch(startDateStr);
+                    info.endDate = Common::Utils::datetimeToEpoch(endDateStr);
+
                     guard.commit();
                     return info;
                 }
                 else
                 {
-                    const std::string insertQuery = "INSERT INTO " + tableName + " (StartDate, EndDate) "
-                        "VALUES (FROM_UNIXTIME(0), FROM_UNIXTIME(0))";
+                    std::string epochZeroStr = Common::Utils::epochToDatetime(0);
+                    const std::string insertQuery = "INSERT INTO " + tableName + " (StartDate, EndDate) VALUES (?, ?)";
                     std::unique_ptr<sql::PreparedStatement> insertStmt(m_transactionalCon->prepareStatement(insertQuery));
+                    insertStmt->setString(1, epochZeroStr);
+                    insertStmt->setString(2, epochZeroStr);
                     insertStmt->executeUpdate();
+
                     guard.commit();
                     return Main::Structures::EventMissionInfo{ 0, 0 };
                 }
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getEventInfo (" + tableName + ")");
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::getEventInfo (" + tableName + ")");
                 throw;
             }
-
-            return std::nullopt;
         }
 
         std::optional<Main::Structures::CapsuleListDatabase> PersistentDatabase::getCapsuleEvent()
@@ -332,8 +338,7 @@ namespace Main
             {
                 TransactionGuard guard(m_transactionalCon.get());
 
-                const std::string query = R"(SELECT UNIX_TIMESTAMP(StartDate) AS StartTimestamp,UNIX_TIMESTAMP(EndDate) AS EndTimestamp,
-                   NewMpPrice,NewRtPrice FROM CapsuleEvents LIMIT 1)";
+                const std::string query = R"(SELECT StartDate, EndDate, NewMpPrice, NewRtPrice FROM CapsuleEvents LIMIT 1)";
 
                 std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(query));
                 std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
@@ -341,8 +346,12 @@ namespace Main
                 if (res->next())
                 {
                     Main::Structures::CapsuleListDatabase capsule;
-                    capsule.saleEventStartDate = res->getUInt("StartTimestamp");
-                    capsule.saleEventEndDate = res->getUInt("EndTimestamp");
+
+                    std::string startDateStr = res->getString("StartDate").c_str();
+                    std::string endDateStr = res->getString("EndDate").c_str();
+
+                    capsule.saleEventStartDate = Common::Utils::datetimeToEpoch(startDateStr);
+                    capsule.saleEventEndDate = Common::Utils::datetimeToEpoch(endDateStr);
                     capsule.newMpPrice = res->getUInt("NewMpPrice");
                     capsule.newRtPrice = res->getUInt("NewRtPrice");
 
@@ -351,10 +360,13 @@ namespace Main
                 }
                 else
                 {
-                    const std::string insertQuery = R"(INSERT INTO CapsuleEvents (StartDate, EndDate, NewMpPrice, NewRtPrice)
-                      VALUES (FROM_UNIXTIME(0), FROM_UNIXTIME(0), 0, 0))";
+                    std::string epochZeroStr = Common::Utils::epochToDatetime(0);
+
+                    const std::string insertQuery = R"(INSERT INTO CapsuleEvents (StartDate, EndDate, NewMpPrice, NewRtPrice) VALUES (?, ?, 0, 0))";
 
                     std::unique_ptr<sql::PreparedStatement> insertStmt(m_transactionalCon->prepareStatement(insertQuery));
+                    insertStmt->setString(1, epochZeroStr);
+                    insertStmt->setString(2, epochZeroStr);
                     insertStmt->executeUpdate();
 
                     guard.commit();
@@ -363,8 +375,7 @@ namespace Main
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::getCapsuleEvent");
-                throw;
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getCapsuleEvent"); throw;
             }
 
             return std::nullopt;
@@ -386,25 +397,27 @@ namespace Main
                     exists = checkRes->getUInt("Count") > 0;
                 }
 
+                std::string startDateStr = Common::Utils::epochToDatetime(capsule.saleEventStartDate);
+                std::string endDateStr = Common::Utils::epochToDatetime(capsule.saleEventEndDate);
+
                 if (exists)
                 {
-                    const std::string updateQuery = R"(UPDATE CapsuleEvents SET StartDate = FROM_UNIXTIME(?), EndDate = FROM_UNIXTIME(?),
-                    NewMpPrice = ?, NewRtPrice = ?)";
+                    const std::string updateQuery = R"(UPDATE CapsuleEvents SET StartDate = ?, EndDate = ?, NewMpPrice = ?, NewRtPrice = ?)";
 
                     std::unique_ptr<sql::PreparedStatement> updateStmt(m_transactionalCon->prepareStatement(updateQuery));
-                    updateStmt->setUInt(1, capsule.saleEventStartDate);
-                    updateStmt->setUInt(2, capsule.saleEventEndDate);
+                    updateStmt->setString(1, startDateStr);
+                    updateStmt->setString(2, endDateStr);
                     updateStmt->setUInt(3, capsule.newMpPrice);
                     updateStmt->setUInt(4, capsule.newRtPrice);
                     updateStmt->executeUpdate();
                 }
                 else
                 {
-                    const std::string insertQuery = R"(INSERT INTO CapsuleEvents (StartDate, EndDate, NewMpPrice, NewRtPrice) VALUES (FROM_UNIXTIME(?), FROM_UNIXTIME(?), ?, ?))";
+                    const std::string insertQuery = R"(INSERT INTO CapsuleEvents (StartDate, EndDate, NewMpPrice, NewRtPrice) VALUES (?, ?, ?, ?))";
 
                     std::unique_ptr<sql::PreparedStatement> insertStmt(m_transactionalCon->prepareStatement(insertQuery));
-                    insertStmt->setUInt(1, capsule.saleEventStartDate);
-                    insertStmt->setUInt(2, capsule.saleEventEndDate);
+                    insertStmt->setString(1, startDateStr);
+                    insertStmt->setString(2, endDateStr);
                     insertStmt->setUInt(3, capsule.newMpPrice);
                     insertStmt->setUInt(4, capsule.newRtPrice);
                     insertStmt->executeUpdate();
@@ -415,7 +428,7 @@ namespace Main
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error,"PersistentDatabase::updateCapsuleEvent");
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::updateCapsuleEvent");
                 throw;
             }
         }
@@ -477,7 +490,6 @@ namespace Main
             return false;
         }
 
-
         bool PersistentDatabase::logBoughtItems(std::uint32_t accountId, const std::vector<Main::Structures::BoughtItem>& boughtItems, bool isCouponItems)
         {
             std::vector<Main::Structures::ItemLogInfo> logInfos;
@@ -534,22 +546,24 @@ namespace Main
 
                 if (checkRes->next() && checkRes->getUInt("RowCount") == 0)
                 {
-                    const std::string insertQuery = "INSERT INTO " + tableName + " (StartDate, EndDate) "
-                        "VALUES (FROM_UNIXTIME(0), FROM_UNIXTIME(0))";
-
+                    std::string epochZeroStr = Common::Utils::epochToDatetime(0);
+                    const std::string insertQuery = "INSERT INTO " + tableName + " (StartDate, EndDate) VALUES (?, ?)";
                     std::unique_ptr<sql::PreparedStatement> insertStmt(m_transactionalCon->prepareStatement(insertQuery));
+                    insertStmt->setString(1, epochZeroStr);
+                    insertStmt->setString(2, epochZeroStr);
                     insertStmt->executeUpdate();
                 }
 
-                const std::string updateQuery = "UPDATE " + tableName + " SET StartDate = FROM_UNIXTIME(?), "
-                    "EndDate = FROM_UNIXTIME(?) LIMIT 1";
+                std::string startDateStr = Common::Utils::epochToDatetime(info.startDate);
+                std::string endDateStr = Common::Utils::epochToDatetime(info.endDate);
 
+                const std::string updateQuery = "UPDATE " + tableName + " SET StartDate = ?, EndDate = ? LIMIT 1";
                 std::unique_ptr<sql::PreparedStatement> updateStmt(m_transactionalCon->prepareStatement(updateQuery));
-                updateStmt->setUInt(1, info.startDate);
-                updateStmt->setUInt(2, info.endDate);
+                updateStmt->setString(1, startDateStr);
+                updateStmt->setString(2, endDateStr);
 
                 bool success = updateStmt->executeUpdate() > 0;
-                txn.commit(); 
+                txn.commit();
                 return success;
             }
             catch (const sql::SQLException& e)
@@ -558,9 +572,8 @@ namespace Main
                 throw;
             }
 
-            return false; 
+            return false;
         }
-
 
         std::optional<Main::Structures::ExpMpBonusInfo> PersistentDatabase::getExpMpBonusInfo()
         {
@@ -568,38 +581,47 @@ namespace Main
             {
                 TransactionGuard txn(m_transactionalCon.get());
 
-                const std::string query = R"(SELECT UNIX_TIMESTAMP(StartDate) AS StartTimestamp, UNIX_TIMESTAMP(EndDate) AS EndTimestamp,
-                   ExpBonusPercent, MpBonusPercent FROM ExpMpBonusEvents LIMIT 1)";
+                const std::string query = R"(SELECT StartDate, EndDate, ExpBonusPercent, MpBonusPercent FROM ExpMpBonusEvents LIMIT 1)";
+
                 std::unique_ptr<sql::PreparedStatement> stmt(m_transactionalCon->prepareStatement(query));
                 std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
                 if (res->next())
                 {
                     Main::Structures::ExpMpBonusInfo info;
-                    info.startDate = res->getUInt("StartTimestamp");
-                    info.endDate = res->getUInt("EndTimestamp");
+
+                    std::string startDateStr = res->getString("StartDate").c_str();
+                    std::string endDateStr = res->getString("EndDate").c_str();
+
+                    info.startDate = Common::Utils::datetimeToEpoch(startDateStr);
+                    info.endDate = Common::Utils::datetimeToEpoch(endDateStr);
+
                     info.expBonusPercent = res->getUInt("ExpBonusPercent");
                     info.mpBonusPercent = res->getUInt("MpBonusPercent");
+
                     txn.commit();
                     return info;
                 }
                 else
                 {
-                    const std::string insertQuery = R"(INSERT INTO ExpMpBonusEvents (StartDate, EndDate, ExpBonusPercent, MpBonusPercent) 
-                        VALUES (FROM_UNIXTIME(0), FROM_UNIXTIME(0), 0, 0))";
+                    std::string epochZeroStr = Common::Utils::epochToDatetime(0);
+
+                    const std::string insertQuery = R"(INSERT INTO ExpMpBonusEvents (StartDate, EndDate, ExpBonusPercent, MpBonusPercent) VALUES (?, ?, 0, 0))";
+
                     std::unique_ptr<sql::PreparedStatement> insertStmt(m_transactionalCon->prepareStatement(insertQuery));
+                    insertStmt->setString(1, epochZeroStr);
+                    insertStmt->setString(2, epochZeroStr);
                     insertStmt->executeUpdate();
+
                     txn.commit();
                     return Main::Structures::ExpMpBonusInfo{ 0, 0, 0, 0 };
                 }
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::getExpMpBonusInfo");               
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::getExpMpBonusInfo");
                 throw;
             }
-
-            return std::nullopt;
         }
 
         bool PersistentDatabase::updateExpMpBonusInfo(const Main::Structures::ExpMpBonusInfo& info)
@@ -614,36 +636,37 @@ namespace Main
 
                 if (checkRes->next() && checkRes->getUInt("RowCount") == 0)
                 {
-                    const std::string insertQuery = R"(INSERT INTO ExpMpBonusEvents (StartDate, EndDate, ExpBonusPercent, MpBonusPercent)
-                        VALUES (FROM_UNIXTIME(0), FROM_UNIXTIME(0), 0, 0))";
+                    std::string epochZeroStr = Common::Utils::epochToDatetime(0);
+
+                    const std::string insertQuery = R"(INSERT INTO ExpMpBonusEvents (StartDate, EndDate, ExpBonusPercent, MpBonusPercent) VALUES (?, ?, 0, 0))";
 
                     std::unique_ptr<sql::PreparedStatement> insertStmt(m_transactionalCon->prepareStatement(insertQuery));
+                    insertStmt->setString(1, epochZeroStr);
+                    insertStmt->setString(2, epochZeroStr);
                     insertStmt->executeUpdate();
                 }
 
-                const std::string updateQuery = R"(UPDATE ExpMpBonusEvents SET StartDate = FROM_UNIXTIME(?), EndDate = FROM_UNIXTIME(?), ExpBonusPercent = ?,
-                    MpBonusPercent = ? LIMIT 1)";
+                std::string startDateStr = Common::Utils::epochToDatetime(info.startDate);
+                std::string endDateStr = Common::Utils::epochToDatetime(info.endDate);
+
+                const std::string updateQuery = R"(UPDATE ExpMpBonusEvents  SET StartDate = ?, EndDate = ?, ExpBonusPercent = ?, MpBonusPercent = ?  LIMIT 1)";
 
                 std::unique_ptr<sql::PreparedStatement> updateStmt(m_transactionalCon->prepareStatement(updateQuery));
-                updateStmt->setUInt(1, info.startDate);
-                updateStmt->setUInt(2, info.endDate);
+                updateStmt->setString(1, startDateStr);
+                updateStmt->setString(2, endDateStr);
                 updateStmt->setUInt(3, info.expBonusPercent);
                 updateStmt->setUInt(4, info.mpBonusPercent);
                 updateStmt->executeUpdate();
 
-                const std::string updateModes = R"(UPDATE EventModes SET EndDate = FROM_UNIXTIME(?))";
-                {
-                    std::unique_ptr<sql::PreparedStatement> updateStmtModes(m_transactionalCon->prepareStatement(updateModes));
-                    updateStmtModes->setUInt(1, info.endDate);
-                    updateStmtModes->executeUpdate();
-                }
+                const std::string updateModes = R"(UPDATE EventModes SET EndDate = ?)";
+                std::unique_ptr<sql::PreparedStatement> updateStmtModes(m_transactionalCon->prepareStatement(updateModes));
+                updateStmtModes->setString(1, endDateStr);
+                updateStmtModes->executeUpdate();
 
-                const std::string updateMaps = R"(UPDATE EventMaps SET EndDate = FROM_UNIXTIME(?))";
-                {
-                    std::unique_ptr<sql::PreparedStatement> updateStmtMaps(m_transactionalCon->prepareStatement(updateMaps));
-                    updateStmtMaps->setUInt(1, info.endDate);
-                    updateStmtMaps->executeUpdate();
-                }
+                const std::string updateMaps = R"(UPDATE EventMaps SET EndDate = ?)";
+                std::unique_ptr<sql::PreparedStatement> updateStmtMaps(m_transactionalCon->prepareStatement(updateMaps));
+                updateStmtMaps->setString(1, endDateStr);
+                updateStmtMaps->executeUpdate();
 
                 txn.commit();
                 return true;
@@ -991,8 +1014,7 @@ namespace Main
 
                     const char* lastLoggedCStr = res->getString("LastLogged").c_str();
                     std::string lastLogged = std::string(lastLoggedCStr);
-                    return std::make_optional<std::pair<Main::Structures::AccountInfo, std::string>>(
-                        playerInfoStructure, lastLogged);
+                    return std::make_optional<std::pair<Main::Structures::AccountInfo, std::string>>(playerInfoStructure, lastLogged);
                 }
                 else
                 {
@@ -1010,32 +1032,31 @@ namespace Main
         {
             try
             {
-                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement("SELECT * FROM Users WHERE AccountID = ?"));
+                std::unique_ptr<sql::PreparedStatement> stmt(
+                    m_con->prepareStatement("SELECT * FROM Users WHERE AccountID = ?")
+                );
                 stmt->setUInt(1, playerID);
                 std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
                 if (res->next())
                 {
-                    const std::string mutedUntil = res->getString("MutedUntil").c_str();
+                    const std::string mutedUntilStr = res->getString("MutedUntil").c_str();
                     const std::string muteReason = res->getString("MuteReason").c_str();
                     const std::string mutedBy = res->getString("MutedBy").c_str();
 
-                    auto const time = std::chrono::utc_clock::now();
-                    std::string currentTimeStr = std::format("{:%Y-%m-%d %X}", time); 
-
-                    bool isMuted = mutedUntil > currentTimeStr;
-
-                    return Main::Structures::MuteInfo{isMuted, muteReason, mutedBy, mutedUntil };
+                    std::uint64_t mutedUntilEpoch = Common::Utils::datetimeToEpoch(mutedUntilStr);
+                    std::uint64_t nowEpoch = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+                    bool isMuted = nowEpoch < mutedUntilEpoch;
+                    return Main::Structures::MuteInfo{ isMuted, muteReason, mutedBy, mutedUntilStr };
                 }
                 else
                 {
-                    ::Utils::Logger::log("No muteinfo found for AccountID: " + std::to_string(playerID), Utils::LogType::Warning, "PersistentDatabase::isMuted");
-                    return {};  
+                    ::Utils::Logger::log("No muteinfo found for AccountID: " + std::to_string(playerID),Utils::LogType::Warning,"PersistentDatabase::isMuted");return {};
                 }
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::isMuted");
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::isMuted");
                 throw;
             }
         }
@@ -1050,26 +1071,24 @@ namespace Main
 
                 if (res->next())
                 {
-                    const std::string mutedUntil = res->getString("MutedUntil").c_str();
+                    const std::string mutedUntilStr = res->getString("MutedUntil").c_str();
                     const std::string muteReason = res->getString("MuteReason").c_str();
                     const std::string mutedBy = res->getString("MutedBy").c_str();
 
-                    auto const time = std::chrono::utc_clock::now();
-                    std::string currentTimeStr = std::format("{:%Y-%m-%d %X}", time);
-
-                    bool isMuted = mutedUntil > currentTimeStr;
-
-                    return Main::Structures::MuteInfo{ isMuted, muteReason, mutedBy, mutedUntil };
+                    std::uint64_t mutedUntilEpoch = Common::Utils::datetimeToEpoch(mutedUntilStr);
+                    std::uint64_t nowEpoch = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+                    bool isMuted = nowEpoch < mutedUntilEpoch;
+                    return Main::Structures::MuteInfo{ isMuted, muteReason, mutedBy, mutedUntilStr };
                 }
                 else
                 {
-                    ::Utils::Logger::log("No muteinfo found for nickname: " + nickname, Utils::LogType::Warning, "PersistentDatabase::getMuteInfoByNickname");
+                    ::Utils::Logger::log("No muteinfo found for nickname: " + nickname,Utils::LogType::Warning,"PersistentDatabase::getMuteInfoByNickname");
                     return std::nullopt;
                 }
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getMuteInfoByNickname");
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::getMuteInfoByNickname");
                 throw;
             }
         }
@@ -1084,15 +1103,13 @@ namespace Main
 
                 if (res->next())
                 {
-                    const std::string suspendedUntil = res->getString("SuspendedUntil").c_str();
+                    const std::string suspendedUntilStr = res->getString("SuspendedUntil").c_str();
                     const std::string suspensionReason = res->getString("SuspensionReason").c_str();
 
-                    auto const time = std::chrono::utc_clock::now();
-                    std::string currentTimeStr = std::format("{:%Y-%m-%d %X}", time);  
-
-                    bool isBanned = suspendedUntil > currentTimeStr;
-
-                    return Main::Structures::BanInfo{ isBanned, suspensionReason, suspendedUntil };
+                    std::uint64_t suspendedUntilEpoch = Common::Utils::datetimeToEpoch(suspendedUntilStr);
+                    std::uint64_t nowEpoch = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+                    bool isBanned = nowEpoch < suspendedUntilEpoch;
+                    return Main::Structures::BanInfo{ isBanned, suspensionReason, suspendedUntilStr };
                 }
                 else
                 {
@@ -1113,13 +1130,19 @@ namespace Main
             {
                 std::string selectQueryStr = "SELECT RoomCreationDisabledUntil FROM Users WHERE Nickname = ?";
                 std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(selectQueryStr));
-                stmt->setString(1, nickname);  
+                stmt->setString(1, nickname);
 
                 std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
                 if (res->next())
                 {
-                    const std::string disabledUntil = res->getString("RoomCreationDisabledUntil").c_str();
-                    return disabledUntil;
+                    const std::string disabledUntilStr = res->getString("RoomCreationDisabledUntil").c_str();
+                    std::uint64_t disabledUntilEpoch = Common::Utils::datetimeToEpoch(disabledUntilStr);
+                    std::uint64_t nowEpoch = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+
+                    if (nowEpoch < disabledUntilEpoch)
+                        return disabledUntilStr;
+
+                    return std::nullopt;
                 }
 
                 return std::nullopt;
@@ -1141,9 +1164,15 @@ namespace Main
 
                 if (res->next())
                 {
-                    const std::string disabledUntil = res->getString("RoomCreationDisabledUntil").c_str();
-                    auto const time = std::chrono::utc_clock::now();
-                    return disabledUntil > std::format("{:%Y-%m-%d %X}", time);
+                    const std::string disabledUntilStr = res->getString("RoomCreationDisabledUntil").c_str();
+                    std::uint64_t disabledUntilEpoch = Common::Utils::datetimeToEpoch(disabledUntilStr);
+                    std::uint64_t nowEpoch = static_cast<std::uint64_t>(
+                        std::chrono::duration_cast<std::chrono::seconds>(
+                            std::chrono::system_clock::now().time_since_epoch()
+                        ).count()
+                        );
+
+                    return nowEpoch < disabledUntilEpoch;
                 }
 
                 ::Utils::Logger::log("No room creation ban info found for AccountID: " + std::to_string(playerID), Utils::LogType::Warning, "PersistentDatabase::isRoomCreationDisabled");
@@ -1155,7 +1184,7 @@ namespace Main
                 throw;
             }
         }
-
+       
         std::optional<std::string> PersistentDatabase::getVotekickDisabledUntil(const std::string& nickname)
         {
             try
@@ -1167,8 +1196,18 @@ namespace Main
                 std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
                 if (res->next())
                 {
-                    const std::string disabledUntil = res->getString("VotekickDisabledUntil").c_str();
-                    return disabledUntil;
+                    const std::string disabledUntilStr = res->getString("VotekickDisabledUntil").c_str();
+                    std::uint64_t disabledUntilEpoch = Common::Utils::datetimeToEpoch(disabledUntilStr);
+                    std::uint64_t nowEpoch = static_cast<std::uint64_t>(
+                        std::chrono::duration_cast<std::chrono::seconds>(
+                            std::chrono::system_clock::now().time_since_epoch()
+                        ).count()
+                        );
+
+                    if (nowEpoch < disabledUntilEpoch)
+                        return disabledUntilStr;
+
+                    return std::nullopt;
                 }
                 return std::nullopt;
             }
@@ -1189,9 +1228,15 @@ namespace Main
                 std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
                 if (res->next())
                 {
-                    const std::string disabledUntil = res->getString("VotekickDisabledUntil").c_str();
-                    auto const time = std::chrono::utc_clock::now();
-                    return disabledUntil > std::format("{:%Y-%m-%d %X}", time);
+                    const std::string disabledUntilStr = res->getString("VotekickDisabledUntil").c_str();
+                    std::uint64_t disabledUntilEpoch = Common::Utils::datetimeToEpoch(disabledUntilStr);
+                    std::uint64_t nowEpoch = static_cast<std::uint64_t>(
+                        std::chrono::duration_cast<std::chrono::seconds>(
+                            std::chrono::system_clock::now().time_since_epoch()
+                        ).count()
+                        );
+
+                    return nowEpoch < disabledUntilEpoch;
                 }
                 return false;
             }
@@ -1996,8 +2041,7 @@ namespace Main
             }
         }
 
-        bool PersistentDatabase::updateMute(const std::string& nickname, const std::string& until,
-            const std::string& reason, const std::string& mutedBy,
+        bool PersistentDatabase::updateMute(const std::string& nickname, const std::string& until,const std::string& reason, const std::string& mutedBy,
             std::uint32_t executorGrade)
         {
             try
@@ -2813,6 +2857,7 @@ namespace Main
             return pendingFriendRequests;
         }
 
+        // We're limited by uint32_t here since that's what the game expects ....
         std::vector<Main::Structures::SingleModeEvent> PersistentDatabase::getEventsModeList()
         {
             try
@@ -3202,19 +3247,27 @@ namespace Main
                     mailbox.accountId = res->getInt("accountId");
                     mailbox.timestamp = res->getInt("timestamp");
                     mailbox.hasBeenRead = !res->getBoolean("isNew");
-                    const std::string nicknameStr = res->getString("nickname").c_str();
-                    std::memset(mailbox.nickname, 0, sizeof(mailbox.nickname));
-                    std::memcpy(mailbox.nickname, nicknameStr.c_str(), std::min(nicknameStr.size(), sizeof(mailbox.nickname) - 1));
 
-                    const std::string messageStr = res->getString("message").c_str();
+                    std::string nicknameStr = res->getString("nickname").c_str();
+                    size_t copyLen = nicknameStr.size();
+                    if (copyLen >= sizeof(mailbox.nickname)) copyLen = sizeof(mailbox.nickname) - 1;
+                    std::memset(mailbox.nickname, 0, sizeof(mailbox.nickname));
+                    std::memcpy(mailbox.nickname, nicknameStr.c_str(), copyLen);
+                    mailbox.nickname[copyLen] = '\0';
+
+                    std::string messageStr = res->getString("message").c_str();
+                    copyLen = messageStr.size();
+                    if (copyLen >= sizeof(mailbox.message)) copyLen = sizeof(mailbox.message) - 1;
                     std::memset(mailbox.message, 0, sizeof(mailbox.message));
-                    std::memcpy(mailbox.message, messageStr.c_str(), std::min(messageStr.size(), sizeof(mailbox.message) - 1));
+                    std::memcpy(mailbox.message, messageStr.c_str(), copyLen);
+                    mailbox.message[copyLen] = '\0';
 
                     if (res->getBoolean("sent"))
                         sentMailboxes.push_back(mailbox);
                     else
                         receivedMailboxes.push_back(mailbox);
                 }
+
             }
             catch (const sql::SQLException& e)
             {
@@ -3249,8 +3302,14 @@ namespace Main
 
                     std::memset(giftbox.nickname, 0, sizeof(giftbox.nickname));
                     std::memset(giftbox.message, 0, sizeof(giftbox.message));
-                    std::memcpy(giftbox.nickname, senderStr.c_str(), std::min(senderStr.size(), sizeof(giftbox.nickname) - 1));
-                    std::memcpy(giftbox.message, messageStr.c_str(), std::min(messageStr.size(), sizeof(giftbox.message) - 1));
+                    size_t copyLen = senderStr.size();
+                    if (copyLen >= sizeof(giftbox.nickname)) copyLen = sizeof(giftbox.nickname) - 1;
+                    std::memcpy(giftbox.nickname, senderStr.c_str(), copyLen);
+                    giftbox.nickname[copyLen] = '\0'; 
+                    copyLen = messageStr.size();
+                    if (copyLen >= sizeof(giftbox.message)) copyLen = sizeof(giftbox.message) - 1;
+                    std::memcpy(giftbox.message, messageStr.c_str(), copyLen);
+                    giftbox.message[copyLen] = '\0';
 
                     giftboxes.push_back(giftbox);
                 }

@@ -81,38 +81,6 @@ namespace Main
 				return false;
 			}
 
-			std::chrono::system_clock::time_point stringToSystemTime(const std::string& givenTime) 
-			{
-				std::tm tm = {};
-				std::istringstream ss(givenTime);
-
-				ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
-				if (ss.fail()) 
-				{
-					std::cerr << "Error: Invalid date-time format: " << givenTime << '\n';
-					return std::chrono::system_clock::from_time_t(0); 
-				}
-
-				std::chrono::system_clock::time_point tp = std::chrono::system_clock::from_time_t(std::mktime(&tm));
-
-				if (tp == std::chrono::system_clock::time_point{}) {
-					std::cerr << "Error: mktime failed for date-time string: " << givenTime << '\n';
-					return std::chrono::system_clock::from_time_t(0);
-				}
-
-				return tp;
-			}
-
-			std::string systemTimeToString(std::chrono::system_clock::time_point timePoint) 
-			{
-				std::time_t time = std::chrono::system_clock::to_time_t(timePoint);
-				std::tm tm = *std::localtime(&time);
-
-				std::ostringstream oss;
-				oss << std::put_time(&tm, "%Y-%m-%d %H:%M:%S"); 
-				return oss.str();
-			}
-
 		public:
 			explicit PlayerInfo(const Common::Enums::PlayerGrade requiredGrade)
 				: ICommand{ requiredGrade, "/playerinfo <nickname>",  R"(^\S+\s+(.*)$)" }

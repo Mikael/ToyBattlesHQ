@@ -27,7 +27,8 @@ namespace Main
 				session->sendWeeklyReward();
 				session->sendMonthlyReward();
 
-				const std::uint32_t now = static_cast<std::uint32_t>(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+				const std::uint64_t now = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+
 				if (now >= eventMissionInfo.startDate && now <= eventMissionInfo.endDate)
 				{
 					session->setEventMissions(scheduler.immediatePersist(std::source_location::current(),

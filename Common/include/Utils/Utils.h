@@ -23,6 +23,14 @@
 #include "SetupParser.h"
 
 
+#include <chrono>
+#include <string>
+#include <sstream>
+#include <iomanip>
+#include <cstdint>
+#include <format> 
+
+
 #undef ENABLE_DEBUG_MESSAGES
 
 #ifdef ENABLE_DEBUG_MESSAGES
@@ -286,6 +294,28 @@ namespace Common
 			return digest;
 		}
 
+		inline uint64_t datetimeToEpoch(const std::string& datetimeStr) noexcept
+		{
+			using namespace std::chrono;
+			if (datetimeStr.empty()) return 0;
+
+			std::istringstream ss(datetimeStr);
+			sys_seconds tp;
+			ss >> parse("%Y-%m-%d %H:%M:%S", tp);
+
+			if (ss.fail()) return 0;
+
+			return static_cast<uint64_t>(tp.time_since_epoch().count());
+		}
+
+		inline std::string epochToDatetime(uint64_t secondsSinceEpoch) noexcept
+		{
+			using namespace std::chrono;
+			sys_seconds tp{ seconds{static_cast<int64_t>(secondsSinceEpoch)} };
+			std::ostringstream ss;
+			ss << format("{:%Y-%m-%d %H:%M:%S}", tp);
+			return ss.str();
+		}
 	}
 }
 

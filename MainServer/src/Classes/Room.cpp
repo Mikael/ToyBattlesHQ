@@ -1361,7 +1361,7 @@ namespace Main
 					session->storeEndMatchStats(matchDurationSeconds, stats, matchEnd, hasLeveledUp, m_settings.mode == Common::Enums::ZombieMode,
 						session->getPlayer().getRoomNumber() >= Common::Constants::clanRoomNumberStart);
 
-					const std::uint32_t now = static_cast<std::uint32_t>(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+					const std::uint64_t now = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
 					if (now >= eventMissionInfo.startDate && now <= eventMissionInfo.endDate)
 					{
 						if (m_settings.mode == Common::Enums::ZombieMode && (stats.totalKills / 3) >= 1) // >= 1 zombie kills per match = 1 pt

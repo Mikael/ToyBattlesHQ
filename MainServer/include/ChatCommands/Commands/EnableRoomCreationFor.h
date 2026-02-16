@@ -66,7 +66,6 @@ namespace Main
 						session->sendMessage("error: player not found");
 						return;
 					}
-
 				}
 				else
 				{

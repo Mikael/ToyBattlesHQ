@@ -217,12 +217,12 @@ namespace Main
 			}
 		}
 
-		inline std::vector<Main::Structures::CapsuleList> getCapsuleEvents(std::uint32_t startDate, std::uint32_t endDate, std::uint32_t newMpPrice, 
+		inline std::vector<Main::Structures::CapsuleList> getCapsuleEvents(std::uint64_t startDate, std::uint64_t endDate, std::uint32_t newMpPrice, 
 			std::uint32_t newRtPrice)
 		{
 			std::vector<Main::Structures::CapsuleList> ret;
 
-			const std::uint32_t now = static_cast<std::uint32_t>(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+			const std::uint64_t now = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
 			const bool isEventActive = now >= startDate && now <= endDate;
 
 			for (const auto& [id, capsuleInfoStruct] : cdbCapsuleInfos::getInstance().getEntries())

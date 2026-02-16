@@ -23,7 +23,7 @@ namespace Main
 			response.setTcpHeader(request.getSession(), Common::Enums::USER_LARGE_ENCRYPTION);
 			response.setOrder(request.getOrder());
 
-			const std::uint32_t now = static_cast<std::uint32_t>(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+			const std::uint64_t now = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
 			if (now >= tradeInfo.startDate && now <= tradeInfo.endDate)
 			{
 				const std::uint32_t targetAccountId = Main::Details::parseData<std::uint32_t>(request, sizeof(std::uint32_t));
