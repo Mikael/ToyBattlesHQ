@@ -71,7 +71,9 @@ namespace Main
 			bool updateVotekickDisabledUntil(const std::string& nickname, const std::string& until);
 			bool resetVotekickDisabledUntil(const std::string& nickname);
 			bool unbanPlayer(const std::string& nickname);
-			bool addPlayer(const std::string& username, const std::string& password, const std::string& nickname);
+			bool addPlayer(const std::string& username, const std::string& password, const std::string& nickname, const std::string& email, const std::string& secret2fa);
+			bool playerExistsByUsername(const std::string& username);
+			bool playerExistsByNickname(const std::string& username);
 			auto getPlayerItems(std::uint32_t playerID) -> std::pair<std::vector<Item>, std::unordered_map<std::uint16_t, std::vector<EquippedItem>>>;
 			bool addPlayerItems(std::uint32_t accountID, const std::vector<Item>& items, std::uint32_t latestCharacterSelected = -1);
 			bool replaceItem(std::uint32_t accountID, std::uint64_t itemNumber, std::uint32_t newItemId);

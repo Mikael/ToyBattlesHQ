@@ -1,3 +1,4 @@
+#include "../include/ChatCommands/Commands/AddPlayer.h"
 #include "../include/ChatCommands/Commands/Announce.h"
 #include "../include/ChatCommands/Commands/AssassinMode.h"
 #include "../include/ChatCommands/Commands/Ban.h"

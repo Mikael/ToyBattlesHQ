@@ -13,6 +13,7 @@
 #include <cryptopp/secblock.h>
 #include <boost/json.hpp>
 #include <curl/curl.h>
+#include <random>
 
 #include <limits>
 #include <utility>
@@ -21,7 +22,6 @@
 #include <vector>
 #include "../Network/Session.h"
 #include "SetupParser.h"
-
 
 #include <chrono>
 #include <string>
@@ -127,6 +127,15 @@ namespace Common
 		#endif
 		}
 
+		inline std::string hexEncode(const std::vector<byte>& data)
+		{
+			std::string out;
+			HexEncoder encoder(new StringSink(out), false);
+			encoder.Put(data.data(), data.size());
+			encoder.MessageEnd();
+			return out;
+		}
+
 		inline std::vector<byte> hexDecode(const std::string& hex) 
 		{
 			std::vector<byte> out(hex.size() / 2);
@@ -135,6 +144,36 @@ namespace Common
 			decoder.MessageEnd();
 			decoder.Get(out.data(), out.size());
 			return out;
+		}
+
+		inline std::optional<std::tuple<std::vector<byte>, std::vector<byte>, std::vector<byte>>> encryptAESGCM(const SecByteBlock& key, const std::string& plaintext)
+		{
+			try
+			{
+				AutoSeededRandomPool prng;
+				std::vector<byte> iv(12);
+				prng.GenerateBlock(iv.data(), iv.size());
+
+				GCM<AES>::Encryption encrypt;
+				encrypt.SetKeyWithIV(key, key.size(), iv.data(), iv.size());
+
+				std::string cipherWithTag;
+				AuthenticatedEncryptionFilter ef(encrypt,new StringSink(cipherWithTag),false,16                  );
+
+				ef.ChannelPut("AAD", nullptr, 0);
+				ef.ChannelPut("", reinterpret_cast<const byte*>(plaintext.data()), plaintext.size());
+				ef.ChannelMessageEnd("");
+
+				const size_t tagSize = 16;
+				std::vector<byte> ct(cipherWithTag.begin(), cipherWithTag.end() - tagSize);
+				std::vector<byte> tag(cipherWithTag.end() - tagSize, cipherWithTag.end());
+
+				return std::make_tuple(iv, tag, ct);
+			}
+			catch (...)
+			{
+				return std::nullopt;
+			}
 		}
 
 		inline std::optional<std::string> decryptAESGCM(const SecByteBlock& key, const std::vector<byte>& iv, const std::vector<byte>& tag, const std::vector<byte>& ct) 
@@ -185,6 +224,32 @@ namespace Common
 			}
 		}
 
+		inline std::optional<std::string> encryptEmail(const std::string& email, const SecByteBlock& key)
+		{
+			const std::string PREFIX = "email:gcm:v1:";
+
+			if (email.rfind(PREFIX, 0) == 0)
+				return std::nullopt;
+
+			auto result = encryptAESGCM(key, email);
+			if (!result.has_value())
+				return std::nullopt;
+
+			auto& [iv, tag, ct] = result.value();
+
+			json::object obj;
+			obj["iv"] = hexEncode(iv);
+			obj["tag"] = hexEncode(tag);
+			obj["ct"] = hexEncode(ct);
+
+			std::string jsonStr = json::serialize(obj);
+
+			std::string encoded;
+			StringSource ss(jsonStr,true,new Base64Encoder(new StringSink(encoded), false) );
+
+			return PREFIX + encoded;
+		}
+
 		inline std::optional<std::string> decrypt2FASecret(const std::string& stored, const SecByteBlock& key)
 		{
 			const std::string PREFIX = "2fa:gcm:v1:";
@@ -203,6 +268,32 @@ namespace Common
 			std::vector<byte> ct = hexDecode(obj["ct"].as_string().c_str());
 
 			return decryptAESGCM(key, iv, tag, ct); 
+		}
+
+		inline std::optional<std::string> encrypt2FASecret(const std::string& secret, const SecByteBlock& key)
+		{
+			const std::string PREFIX = "2fa:gcm:v1:";
+
+			if (secret.rfind(PREFIX, 0) == 0)
+				return secret;
+
+			auto result = encryptAESGCM(key, secret);
+			if (!result.has_value())
+				return std::nullopt;
+
+			auto& [iv, tag, ct] = result.value();
+
+			json::object obj;
+			obj["iv"] = hexEncode(iv);
+			obj["tag"] = hexEncode(tag);
+			obj["ct"] = hexEncode(ct);
+
+			std::string jsonStr = json::serialize(obj);
+
+			std::string encoded;
+			StringSource ss(jsonStr,true,new Base64Encoder(new StringSink(encoded), false));
+
+			return PREFIX + encoded;
 		}
 
 		inline size_t payload_source(void* ptr, size_t size, size_t nmemb, void* userp) 
@@ -245,9 +336,12 @@ namespace Common
 				toHeader += recipients[i];
 			}
 
-			std::string data = "To: " + toHeader + "\r\n" +
+			std::string data =
+				"To: " + toHeader + "\r\n" +
 				"From: " + generalSetup.email + "\r\n" +
 				"Subject: " + subject + "\r\n" +
+				"MIME-Version: 1.0\r\n"
+				"Content-Type: text/html; charset=UTF-8\r\n"
 				"\r\n" + body + "\r\n";
 
 			curl_easy_setopt(curl, CURLOPT_USERNAME, generalSetup.email.c_str());
@@ -315,6 +409,34 @@ namespace Common
 			std::ostringstream ss;
 			ss << format("{:%Y-%m-%d %H:%M:%S}", tp);
 			return ss.str();
+		}
+
+		inline std::string generateRandomPassword(std::size_t len = 12)
+		{
+			const std::string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+			std::random_device rd;
+			std::mt19937 gen(rd());
+			std::uniform_int_distribution<size_t> dist(0, chars.size() - 1);
+
+			std::string result;
+			result.reserve(len);
+			for (size_t i = 0; i < len; ++i)
+				result += chars[dist(gen)];
+			return result;
+		}
+
+		inline std::string generate2FASecret(std::size_t len = 16)
+		{
+			const std::string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+			std::random_device rd;
+			std::mt19937 gen(rd());
+			std::uniform_int_distribution<size_t> dist(0, chars.size() - 1);
+
+			std::string result;
+			result.reserve(len);
+			for (size_t i = 0; i < len; ++i)
+				result += chars[dist(gen)];
+			return result;
 		}
 	}
 }

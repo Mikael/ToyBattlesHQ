@@ -519,6 +519,7 @@ namespace Main
         bool PersistentDatabase::logProlongedItems(std::uint32_t accountId, const std::vector<Main::Structures::BoughtItemToProlong>& boughtItems,
             const std::vector<std::uint64_t>& itemDurations)
         {
+            // Need to use 32bits here due to the game using that .....
             const std::uint32_t timeNow = static_cast<std::uint32_t>(
                 std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
 
@@ -1269,15 +1270,18 @@ namespace Main
             }
         }
 
-        bool PersistentDatabase::addPlayer(const std::string& username, const std::string& password, const std::string& nickname)
+        bool PersistentDatabase::addPlayer(const std::string& username, const std::string& password, const std::string& nickname, const std::string& email,
+            const std::string& secret2fa)
         {
             try
             {
-                std::string queryStr = "INSERT INTO Users (Username, Password, Nickname) VALUES (?, ?, ?)";
+                std::string queryStr = "INSERT INTO Users (Username, Password, Nickname, Email, Secret) VALUES (?, ?, ?, ?, ?)";
                 std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(queryStr));
                 stmt->setString(1, username);
                 stmt->setString(2, password);
                 stmt->setString(3, nickname);
+                stmt->setString(4, email);
+                stmt->setString(5, Common::Utils::SetupParser::getInstance().getAuthSetup().enhancedSecurity ? secret2fa : "");
 
                 if (stmt->executeUpdate() == 0)
                 {
@@ -1289,6 +1293,48 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::addPlayer");
+                throw;
+            }
+        }
+
+        bool PersistentDatabase::playerExistsByNickname(const std::string& nickname)
+        {
+            try
+            {
+                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement("SELECT COUNT(*) FROM Users WHERE Nickname = ?"));
+                stmt->setString(1, nickname);
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
+
+                if (res->next())
+                {
+                    return res->getUInt(1) > 0;
+                }
+                return false;
+            }
+            catch (const sql::SQLException& e)
+            {
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::playerExistsByNickname");
+                throw;
+            }
+        }
+
+        bool PersistentDatabase::playerExistsByUsername(const std::string& username)
+        {
+            try
+            {
+                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement("SELECT COUNT(*) FROM Users WHERE Username = ?"));
+                stmt->setString(1, username);
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
+
+                if (res->next())
+                {
+                    return res->getUInt(1) > 0;
+                }
+                return false;
+            }
+            catch (const sql::SQLException& e)
+            {
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::playerExistsByUsername");
                 throw;
             }
         }
