@@ -12,11 +12,15 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/ExternalLibraries/libbcrypt
 
 file(GLOB_RECURSE COMMON_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_LIST_DIR}/*.cpp
+)
+
+file(GLOB_RECURSE COMMON_HEADERS CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_LIST_DIR}/*.h
 )
 
 add_library(Common STATIC
     ${COMMON_SOURCES}
+    ${COMMON_HEADERS} 
 )
 
 set_target_properties(Common PROPERTIES
