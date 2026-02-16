@@ -9,6 +9,7 @@
 #include <optional>
 #include "asio.hpp"
 #include <EmailDispatcher.h>
+#include <libcppotp/auth.h>
 
 namespace Auth
 {
@@ -20,7 +21,7 @@ namespace Auth
 		std::unordered_map<std::uint32_t, Auth::Structures::LoginWrongAttempts> m_badLoginAttempts; // [aid] [LoginWrongAttempts]
 
 	public:
-		AuthService(Auth::Persistence::PersistentDatabase& persistentDatabase, Common::Utils::EmailDispatcher& emailDispatcher)
+		AuthService(Auth::Persistence::PersistentDatabase& persistentDatabase, Common::Utils::EmailDispatcher emailDispatcher)
 			: m_persistentDatabase{ persistentDatabase }
 			, m_emailDispatcher{ emailDispatcher }
 		{
@@ -39,6 +40,28 @@ namespace Auth
 		std::uint32_t generateAccountKey() const;
 		bool isIpInSubnet(const asio::ip::network_v4& network, const asio::ip::address_v4& ip) const;
 		std::string generateRandomSalt(std::size_t length = 16) const;
+
+		bool verifyToken(const std::string& encryptedSecret, const std::optional<std::string>& token)
+		{
+			if (encryptedSecret.empty() || !token.has_value()) return false;
+
+			auto optSecret = Common::Utils::decrypt2FASecret(encryptedSecret, Common::Utils::SetupParser::getInstance().getGeneralSetup().twoFaSecret);
+			if (!optSecret) return false;
+
+			const int t_interval = 30;
+			std::time_t now = std::time(nullptr);
+
+			for (int i = -1; i <= 1; ++i)
+			{
+				auto expectedToken = auth::generateToken(optSecret.value(), now + i * t_interval, t_interval);
+				std::ostringstream oss;
+				oss << std::setw(6) << std::setfill('0') << expectedToken;
+
+				if (oss.str() == token.value()) return true;
+			}
+
+			return false;
+		}
 	};
 }
 

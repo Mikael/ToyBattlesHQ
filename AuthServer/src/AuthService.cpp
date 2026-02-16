@@ -113,7 +113,7 @@ namespace Auth
 		}
 
 		const bool passwordOk = BCrypt::validatePassword(plainPw, ainfo.hashedPassword);
-		const bool tokenOk = Common::Utils::verifyToken(ainfo.secret, token);
+		const bool tokenOk = verifyToken(ainfo.secret, token);
 
 		auto& counters = m_badLoginAttempts[ainfo.ainfoClient.accountId];
 		if (!passwordOk)
@@ -203,7 +203,7 @@ namespace Auth
 		}
 		if (!ainfo.secret.empty())
 		{
-			tokenOk = Common::Utils::verifyToken(ainfo.secret, token);
+			tokenOk = verifyToken(ainfo.secret, token);
 		}
 
 		auto& counters = m_badLoginAttempts[ainfo.ainfoClient.accountId];

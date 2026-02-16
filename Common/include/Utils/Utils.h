@@ -31,7 +31,6 @@
 #include <format> 
 
 
-//#include <libcppotp/auth.h>
 
 #undef ENABLE_DEBUG_MESSAGES
 
@@ -46,6 +45,7 @@
 #else
 #include <iostream>
 #endif
+
 
 
 namespace Common
