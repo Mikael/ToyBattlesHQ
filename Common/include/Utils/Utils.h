@@ -29,9 +29,9 @@
 #include <iomanip>
 #include <cstdint>
 #include <format> 
-#include <regex>
 
 
+//#include <libcppotp/auth.h>
 
 #undef ENABLE_DEBUG_MESSAGES
 
@@ -46,7 +46,6 @@
 #else
 #include <iostream>
 #endif
-#include <libcppotp/auth.h>
 
 
 namespace Common
@@ -442,6 +441,7 @@ namespace Common
 			return result;
 		}
 
+		/*
 		inline bool verifyToken(const std::string& encryptedSecret, const std::optional<std::string>& token)
 		{
 			if (encryptedSecret.empty() || !token.has_value()) return false;
@@ -463,6 +463,7 @@ namespace Common
 
 			return false;
 		}
+		*/
 	}
 }
 
