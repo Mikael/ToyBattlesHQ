@@ -440,30 +440,6 @@ namespace Common
 				result += chars[dist(gen)];
 			return result;
 		}
-
-		/*
-		inline bool verifyToken(const std::string& encryptedSecret, const std::optional<std::string>& token)
-		{
-			if (encryptedSecret.empty() || !token.has_value()) return false;
-
-			auto optSecret = Common::Utils::decrypt2FASecret(encryptedSecret, Common::Utils::SetupParser::getInstance().getGeneralSetup().twoFaSecret);
-			if (!optSecret) return false;
-
-			const int t_interval = 30;
-			std::time_t now = std::time(nullptr);
-
-			for (int i = -1; i <= 1; ++i)
-			{
-				auto expectedToken = auth::generateToken(optSecret.value(), now + i * t_interval, t_interval);
-				std::ostringstream oss;
-				oss << std::setw(6) << std::setfill('0') << expectedToken;
-
-				if (oss.str() == token.value()) return true;
-			}
-
-			return false;
-		}
-		*/
 	}
 }
 
