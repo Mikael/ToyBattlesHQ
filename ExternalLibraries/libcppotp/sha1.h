@@ -25,7 +25,7 @@ namespace CppTotp
         return (num << rotcount) | (num >> (32 - rotcount));
     }
 
-    Bytes::ByteString sha1(const Bytes::ByteString & msg)
+    inline Bytes::ByteString sha1(const Bytes::ByteString & msg)
     {
         const size_t size_bytes = msg.size();
         const uint64_t size_bits = size_bytes * 8;
@@ -153,7 +153,7 @@ namespace CppTotp
         return first + second + third + fourth + fifth;
     }
     
-    Bytes::ByteString hmacSha1(const Bytes::ByteString & key, const Bytes::ByteString & msg, size_t blockSize = 64)
+    inline Bytes::ByteString hmacSha1(const Bytes::ByteString & key, const Bytes::ByteString & msg, size_t blockSize = 64)
     {
         Bytes::ByteString realKey = key;
         Bytes::ByteStringDestructor asplode(&realKey);

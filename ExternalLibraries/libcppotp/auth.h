@@ -14,13 +14,13 @@
 
 namespace auth
 {
-    uint32_t generateToken(const std::string& t_secret, std::time_t timeNow, const int& t_interval = 30) {
+    inline uint32_t generateToken(const std::string& t_secret, std::time_t timeNow, const int& t_interval = 30) {
         const CppTotp::Bytes::ByteString key = CppTotp::Bytes::fromBase32(t_secret);
         uint32_t token = CppTotp::totp(key, timeNow, 0, t_interval, 6);
         return token;
     }
 
-    std::string base32_decode(const std::string& t_base32str) {
+    inline std::string base32_decode(const std::string& t_base32str) {
         std::string base32_string = t_base32str;
         std::transform(base32_string.begin(), base32_string.end(), base32_string.begin(), ::toupper);
         std::string allowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";

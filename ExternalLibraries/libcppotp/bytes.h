@@ -26,7 +26,7 @@ namespace CppTotp
 		/** The type of a byte string. */
 		typedef std::basic_string<Byte> ByteString;
 
-		void clearByteString(ByteString * bstr)
+		inline void clearByteString(ByteString * bstr)
 		{
 			volatile Byte * bs = const_cast<volatile Byte *>(bstr->data());
 
@@ -36,7 +36,7 @@ namespace CppTotp
 			}
 		}
 
-		void swizzleByteStrings(ByteString * target, ByteString * source)
+		inline void swizzleByteStrings(ByteString * target, ByteString * source)
 		{
 			clearByteString(target);
 			target->assign(*source);
@@ -81,7 +81,7 @@ namespace CppTotp
 			}
 		}
 
-		std::string toHexString(const ByteString & bstr)
+		inline std::string toHexString(const ByteString & bstr)
 		{
 			std::string ret;
 
@@ -94,7 +94,7 @@ namespace CppTotp
 			return ret;
 		}
 
-		ByteString fromHexStringSkipUnknown(const std::string & str)
+		inline ByteString fromHexStringSkipUnknown(const std::string & str)
 		{
 			std::string hstr;
 			for (char c : str)
@@ -126,7 +126,7 @@ namespace CppTotp
 			return ret;
 		}
 
-		Bytes::ByteString u32beToByteString(uint32_t num)
+		inline Bytes::ByteString u32beToByteString(uint32_t num)
 		{
 			Bytes::ByteString ret;
 			ret.push_back((num >> 24) & 0xFF);
@@ -136,7 +136,7 @@ namespace CppTotp
 			return ret;
 		}
 
-		Bytes::ByteString u64beToByteString(uint64_t num)
+		inline Bytes::ByteString u64beToByteString(uint64_t num)
 		{
 			Bytes::ByteString left  = u32beToByteString((num >> 32) & 0xFFFFFFFF);
 			Bytes::ByteString right = u32beToByteString((num >>  0) & 0xFFFFFFFF);
@@ -286,7 +286,7 @@ namespace CppTotp
 			return ret;
 		}
 
-		ByteString fromBase32(const std::string & b32str)
+		inline ByteString fromBase32(const std::string & b32str)
 		{
 			if (b32str.size() % 8 != 0)
 			{
@@ -305,7 +305,7 @@ namespace CppTotp
 			return ret;
 		}
 
-		ByteString fromUnpaddedBase32(const std::string & b32str)
+		inline ByteString fromUnpaddedBase32(const std::string & b32str)
 		{
 			std::string newstr = b32str;
 
@@ -317,7 +317,7 @@ namespace CppTotp
 			return fromBase32(newstr);
 		}
 
-		std::string toBase32(const ByteString & bs)
+		inline std::string toBase32(const ByteString & bs)
 		{
 			std::string ret;
 
