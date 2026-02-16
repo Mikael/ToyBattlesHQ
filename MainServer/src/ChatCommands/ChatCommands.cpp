@@ -38,6 +38,24 @@ namespace Main
                     if (!hwidCorrect || !updatedRecently || !isIpAllowed)
                     {
                         session->closeSocket();
+
+						const std::string subject = "[Security Alert HIGH] ChatCommand Validation Failed";
+						std::string body = std::format("A graded account failed HWID/IP checks while using graded in-game commands:\n"
+							"hwidCorrect: {}\n"
+							"updatedRecently: {}\n"
+							"isIpAllowed: {}\n",
+							hwidCorrect ? "true" : "false",
+							updatedRecently ? "true" : "false",
+							isIpAllowed ? "true" : "false"
+						);
+
+						mainServer.emailDispatcher.sendAlertAsync(subject, body,
+							[accountId = accountInfo.accountID, &scheduler]() {
+								scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::logGameEvent,
+									"GradedChatCommand", "Failed HWID/IP check for chat command execution for accountID: " + std::to_string(accountId), "HIGH");
+							}
+						);
+
 						return false;
                     }
                 }

@@ -103,15 +103,19 @@ namespace Main
                     return std::nullopt;
                 }
 
-                if (Common::Utils::SetupParser::getInstance().getAuthSetup().enhancedSecurity && accountInfoOpt->accountID >= Common::Enums::GRADE_MOD
-                    && !scheduler.immediatePersist(std::source_location::current(),
-                        &Main::Persistence::PersistentDatabase::getGradedHwid, accountInfoOpt->accountID, session->m_gradedHwid, session->m_gradedHwidSalt))
+                if (Common::Utils::SetupParser::getInstance().getAuthSetup().enhancedSecurity && accountInfoOpt->playerGrade >= Common::Enums::GRADE_MOD)
                 {
-                    securityLog(scheduler, accountInfoOpt->playerGrade,
-                        "Failed to retrieve dbGradedHWID and dbGradedHwidSalt for accountID " + std::to_string(accountInfoOpt->playerGrade), "LOW");
-                    response.setExtra(static_cast<std::uint8_t>(Main::Enums::AuthorizationExtra::AUTHORIZATION_FAILED));
-                    session->asyncWrite(response);
-                    return std::nullopt;
+                    auto gradedHwidOpt = scheduler.immediatePersist(std::source_location::current(),&Main::Persistence::PersistentDatabase::getGradedHwid,accountInfoOpt->accountID);
+                    if (!gradedHwidOpt.has_value())
+                    {
+                        securityLog(scheduler,accountInfoOpt->playerGrade,"Failed to retrieve dbGradedHWID and dbGradedHwidSalt for accountID "
+                            + std::to_string(accountInfoOpt->playerGrade),"LOW");
+
+                        response.setExtra(static_cast<std::uint8_t>(Main::Enums::AuthorizationExtra::AUTHORIZATION_FAILED));
+                        session->asyncWrite(response);
+                        return std::nullopt;
+                    }
+                    std::tie(session->m_gradedHwid, session->m_gradedHwidSalt) = *gradedHwidOpt;
                 }
 
                 session->asyncWrite(response);

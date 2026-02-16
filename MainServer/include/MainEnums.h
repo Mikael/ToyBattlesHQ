@@ -389,6 +389,85 @@ namespace Main
 			LEVEL_TOO_LOW = 74,
 			MAX_NUM_OF_ITEMS_AT_ONCE_REACHED = 75,
 		};
+
+		enum ClanEnlist
+		{
+			CLAN_ENLIST_SUCCESS,
+			CLAN_FULL,
+			CLAN_NOT_FOUND,
+			USER_NOT_FOUND,
+			USER_ALREADY_IN_CLAN,
+			CLAN_ENLIST_DB_ERROR
+		};
+
+		enum class GetPendingRequestsResult
+		{
+			SUCCESS,
+			NOT_IN_CLAN,          
+			NOT_LEADER,            
+			NO_PENDING_REQUESTS,   
+			DB_ERROR             
+		};
+
+		enum class AcceptClanRequestResult
+		{
+			SUCCESS,
+			NOT_IN_CLAN,           
+			NOT_LEADER,           
+			TARGET_NOT_FOUND,      
+			TARGET_NOT_IN_REQUESTS, 
+			TARGET_ALREADY_IN_CLAN,
+			CLAN_FULL,             
+			DB_ERROR               
+		};
+
+		enum class DenyClanRequestResult
+		{
+			SUCCESS,
+			NOT_IN_CLAN,           
+			NOT_LEADER,          
+			TARGET_NOT_FOUND,     
+			TARGET_NOT_IN_REQUESTS,
+			DB_ERROR            
+		};
+
+		enum class KickClanMemberResult
+		{
+			SUCCESS,
+			NOT_IN_CLAN,           
+			NOT_LEADER,            
+			TARGET_NOT_FOUND,     
+			TARGET_NOT_IN_CLAN,   
+			CANNOT_KICK_SELF,      
+			DB_ERROR             
+		};
+
+		enum class LeaveClanResult
+		{
+			SUCCESS,
+			NOT_IN_CLAN,
+			IS_LEADER,
+			DB_ERROR
+		};
+
+		enum class DisbandClanResult
+		{
+			SUCCESS,
+			NOT_IN_CLAN,          
+			NOT_LEADER,            
+			DB_ERROR            
+		};
+
+		enum class TransferOwnershipResult
+		{
+			SUCCESS,
+			NOT_IN_CLAN,           
+			NOT_LEADER,           
+			TARGET_NOT_FOUND,      
+			TARGET_NOT_IN_CLAN,   
+			TARGET_IS_SELF,      
+			DB_ERROR          
+		};
 	}
 }
 #endif

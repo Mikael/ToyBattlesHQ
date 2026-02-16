@@ -38,8 +38,6 @@ int main()
 
 	Utils::Logger::log(banner, Utils::LogType::Info);
 
-
-
 	asio::io_context io_context;
 	Auth::AuthServer srv(io_context, parsedServerInfo.ip, parsedServerInfo.port);
 	srv.asyncAccept();
