@@ -1351,7 +1351,7 @@ namespace Main
 			m_player.setLatestItemNumber(itemNum);
 		}
 
-		bool Session::banAccount(std::uint64_t daysDuration, const std::string& reason, bool isMatchBan)
+		bool Session::banAccount(std::uint64_t daysDuration, const std::string& reason, Common::Enums::PlayerGrade playerGrade)
 		{
 			using namespace std::chrono;
 			using namespace std::literals;
@@ -1360,14 +1360,12 @@ namespace Main
 
 			if (m_scheduler.immediatePersist(std::source_location::current(), 
 				&Main::Persistence::PersistentDatabase::updateSuspension, m_player.getAccountInfo().nickname,
-				bannedUntil, reason, Main::Enums::GRADE_MOD))
+				bannedUntil, reason, playerGrade))
 			{
-				if (!isMatchBan)
-				{
-					m_packet.setCommand(73, 0, 1, 0);
-					m_packet.setData(nullptr, 0);
-					asyncWrite(m_packet);
-				}
+				m_packet.setCommand(73, 0, 1, 0);
+				m_packet.setData(nullptr, 0);
+				asyncWrite(m_packet);
+
 				return true;
 			}
 			return false;

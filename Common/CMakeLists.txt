@@ -7,6 +7,7 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/ExternalLibraries/libbcrypt
 
 file(GLOB_RECURSE COMMON_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_LIST_DIR}/*.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/*.h
 )
 
 add_library(Common STATIC
@@ -29,7 +30,7 @@ target_include_directories(Common
 )
 
 target_link_libraries(Common
-    PUBLIC   
+    PUBLIC
         cryptopp::cryptopp
         unofficial::mariadb-connector-cpp::mariadbcpp
         bcrypt          # libbcrypt
@@ -39,4 +40,3 @@ target_link_libraries(Common
 if(WIN32)
     target_link_libraries(Common PUBLIC "bcrypt.lib" ws2_32 wsock32)
 endif()
-

@@ -186,6 +186,80 @@ namespace Main
             }
         }
 
+        std::optional<std::string> PersistentDatabase::getColumnByAid(const std::string& columnName, std::uint32_t accountID)
+        {
+            try
+            {
+                if (!std::regex_match(columnName, std::regex(R"(^[A-Za-z0-9_]+$)")))
+                {
+                    ::Utils::Logger::log("Invalid column name requested: " + columnName,Utils::LogType::Error,"PersistentDatabase::getColumnByAid");
+                    return std::nullopt;
+                }
+
+                std::string sql = "SELECT " + columnName + " FROM Users WHERE AccountID = ? LIMIT 1";
+
+                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(sql));
+                stmt->setUInt(1, accountID);
+
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
+
+                if (res->next())
+                {
+                    return res->getString(columnName).c_str();
+                }
+
+                return std::nullopt;
+            }
+            catch (const sql::SQLException& e)
+            {
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::getColumnByAid");
+                throw;
+            }
+        }
+
+        bool PersistentDatabase::updatePasswordByAid(std::uint32_t accountID, const std::string& newHashedPassword)
+        {
+            try
+            {
+                std::string sql = "UPDATE Users SET Password = ? WHERE AccountID = ?";
+
+                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(sql));
+                stmt->setString(1, newHashedPassword);
+                stmt->setUInt(2, accountID);
+
+                const int affectedRows = stmt->executeUpdate();
+                return affectedRows > 0;
+            }
+            catch (const sql::SQLException& e)
+            {
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::updatePasswordByAid");
+
+                throw;
+            }
+        }
+
+        bool PersistentDatabase::updateSecretByAid(std::uint32_t accountID, const std::string& newEncryptedSecret)
+        {
+            try
+            {
+                std::string sql = "UPDATE Users SET Secret = ? WHERE AccountID = ?";
+
+                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(sql));
+                stmt->setString(1, newEncryptedSecret);
+                stmt->setUInt(2, accountID);
+
+                const int affectedRows = stmt->executeUpdate();
+                return affectedRows > 0;
+            }
+            catch (const sql::SQLException& e)
+            {
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateSecretByAid");
+
+                throw;
+            }
+        }
+
+
         void PersistentDatabase::logMessage(std::uint32_t accountID, const std::string& message)
         {
             try

@@ -50,6 +50,9 @@ namespace Main
 			void ensureConnections();
 			void updatePlayerCurrencyByType(std::uint32_t accountID, std::uint32_t newAmount, Main::Enums::ItemCurrencyType currencyType);
 			void addPlayerAchievement(std::uint32_t accountID, std::uint32_t achievementIndex);
+			std::optional<std::string> getColumnByAid(const std::string& columnName, std::uint32_t accountID);
+			bool updatePasswordByAid(std::uint32_t accountID, const std::string& newHashedPassword);
+			bool updateSecretByAid(std::uint32_t accountID, const std::string& newEncryptedSecret);
 			void logMessage(std::uint32_t accountID, const std::string& message);
 			std::vector<std::pair<std::uint32_t, std::uint32_t>> getPlayerAchievements(std::uint32_t accountID);
 			std::unordered_map<std::uint32_t, std::uint32_t> getPlayerMissions(std::uint32_t accountID);

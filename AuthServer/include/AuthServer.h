@@ -7,6 +7,7 @@
 #include <string>
 #include "DbPlayerInfo.h"
 #include "AuthService.h"
+#include <EmailDispatcher.h>
 
 namespace Auth
 {
@@ -21,6 +22,7 @@ namespace Auth
 		std::optional<tcp::socket> m_socket;
 		Auth::Persistence::PersistentDatabase m_database;
 		Auth::AuthService m_authService;
+		Common::Utils::EmailDispatcher m_emailDispatcher;
 
 	public:
 		AuthServer(ioContext& io_context, const std::string& ip, std::uint16_t port);

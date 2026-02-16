@@ -17,6 +17,7 @@
 
 #include <AntiCheat/AntiCheat.h>
 #include <Classes/ReportManager.h>
+#include <EmailDispatcher.h>
 
 namespace Main
 {
@@ -77,6 +78,8 @@ namespace Main
 		constexpr bool getRoomCreation() const noexcept { return m_roomCreationEnabled; };
 		Main::Classes::ReportManager& getReportManager() { return m_reportManager; }
 
+		// Emails
+		Common::Utils::EmailDispatcher emailDispatcher;
 	};
 }
 

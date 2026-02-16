@@ -40,12 +40,14 @@ namespace Auth
 
 			if (!isIpInSubnet(vpnNet, clientIp))
 			{
-				if (!Common::Utils::sendEmailAlert("[MEDIUM Alert] TB - Graded Login Wrong VPN IP", "High Level Alert: Graded Account(ID: " 
-						+ std::to_string(ainfo.ainfoClient.accountId) + ") accessed with the wrong VPN IP, access was blocked"))
-				{
-					m_persistentDatabase.logGameEvent("EmailGraded",
-						"Failed to send admin notification after wrong IP subnet at login for graded accountID: " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
-				}
+				m_emailDispatcher.sendAlertAsync("[MEDIUM Alert] TB - Graded Login Wrong VPN IP",
+					"High Level Alert: Graded Account(ID: " + std::to_string(ainfo.ainfoClient.accountId) + ") accessed with the wrong VPN IP, access was blocked",
+
+					[accountId = ainfo.ainfoClient.accountId, this]() {
+						m_persistentDatabase.logGameEvent("EmailGraded",
+							"Failed to send admin notification after wrong IP subnet at login for graded accountID: " + std::to_string(accountId), "HIGH");
+					}
+				);
 
 				m_persistentDatabase.logGameEvent("AuthGradedLogin",
 					"Failed login: IP " + plainIp + " not in allowed subnet for graded account " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
@@ -85,12 +87,14 @@ namespace Auth
 			{
 				if (Common::Utils::hashSha256(plainHwid, dbGradedSalt) != dbGradedHash)
 				{
-					if (!Common::Utils::sendEmailAlert("[HIGH Alert] TB - Graded Login Wrong HWID", "High Level Alert: Graded Account(ID: " 
-							+ std::to_string(ainfo.ainfoClient.accountId) + ") accessed with the wrong HWID, access was blocked"))
-					{				
-						m_persistentDatabase.logGameEvent("EmailGraded",
-							"Failed to send admin notification after wrong HWID at login for graded accountID: " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
-					}
+					m_emailDispatcher.sendAlertAsync("[HIGH Alert] TB - Graded Login Wrong HWID",
+						"High Level Alert: Graded Account(ID: " + std::to_string(ainfo.ainfoClient.accountId) + ") accessed with the wrong HWID, access was blocked",
+						[accountId = ainfo.ainfoClient.accountId, this]() {
+							m_persistentDatabase.logGameEvent("EmailGraded", "Failed to send admin notification after wrong HWID at login for graded accountID: "
+								+ std::to_string(accountId), "HIGH");
+						}
+					);
+
 					m_persistentDatabase.logGameEvent("AuthGradedLogin",
 						"Failed login: HWID mismatch for graded account " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
 					return Auth::Enums::Login::INCORRECT;
@@ -109,7 +113,7 @@ namespace Auth
 		}
 
 		const bool passwordOk = BCrypt::validatePassword(plainPw, ainfo.hashedPassword);
-		const bool tokenOk = verifyToken(ainfo.secret, token);
+		const bool tokenOk = Common::Utils::verifyToken(ainfo.secret, token);
 
 		auto& counters = m_badLoginAttempts[ainfo.ainfoClient.accountId];
 		if (!passwordOk)
@@ -133,24 +137,28 @@ namespace Auth
 				m_persistentDatabase.logGameEvent("AuthGradedLogin",
 					"Account lock attempt failed for account " + std::to_string(ainfo.ainfoClient.accountId), "CRITICAL");
 
-				if (!Common::Utils::sendEmailAlert("[CRITICAL Alert] TB - Graded Account LOCK FAIL!", "Critical Level Alert: Graded Account(ID: "
-						+ std::to_string(ainfo.ainfoClient.accountId) + ") coult NOT BE LOCKED after too many wrong login attempts, lock the account manually!"))
-				{
-					m_persistentDatabase.logGameEvent("EmailGraded",
-						"Failed to send admin notification after not being able to lock graded account after too many failed login attempts, accountID: "
-						+ std::to_string(ainfo.ainfoClient.accountId), "HIGH");
-				}
+				m_emailDispatcher.sendAlertAsync("[CRITICAL Alert] TB - Graded Account LOCK FAIL!",
+					"Critical Level Alert: Graded Account(ID: " + std::to_string(ainfo.ainfoClient.accountId) + 
+					") could NOT BE LOCKED after too many wrong login attempts, lock the account manually!",
+					[accountId = ainfo.ainfoClient.accountId, this]() {
+						m_persistentDatabase.logGameEvent("EmailGraded",
+							"Failed to send admin notification after not being able to lock graded account after too many failed login attempts, accountID: "
+							+ std::to_string(accountId), "HIGH");
+					}
+				);
 
 				return Auth::Enums::Login::INCORRECT;
 			}
 
-			if (!Common::Utils::sendEmailAlert("[CRITICAL Alert] TB - Graded Account LOCKED!", "Critical Level Alert: Graded Account(ID: "
-					+ std::to_string(ainfo.ainfoClient.accountId) + ") was locked due to too many wrong login attempts, see logs in the database"))
-			{
-				m_persistentDatabase.logGameEvent("EmailGraded",
-					"Failed to send admin notification after successfully locking graded account after too many failed login attempts, accountID: "
-					+ std::to_string(ainfo.ainfoClient.accountId), "HIGH");
-			}
+			m_emailDispatcher.sendAlertAsync("[CRITICAL Alert] TB - Graded Account LOCKED!",
+				"Critical Level Alert: Graded Account(ID: " + std::to_string(ainfo.ainfoClient.accountId) +
+				") was locked due to too many wrong login attempts, see logs in the database",
+				[accountId = ainfo.ainfoClient.accountId, this]() {
+					m_persistentDatabase.logGameEvent("EmailGraded",
+						"Failed to send admin notification after successfully locking graded account after too many failed login attempts, accountID: "
+						+ std::to_string(accountId),"HIGH");
+				}
+			);
 
 			m_persistentDatabase.logGameEvent("AuthGradedLogin",
 				"Account locked due to repeated failed login attempts: " + std::to_string(ainfo.ainfoClient.accountId), "CRITICAL");
@@ -195,7 +203,7 @@ namespace Auth
 		}
 		if (!ainfo.secret.empty())
 		{
-			tokenOk = verifyToken(ainfo.secret, token);
+			tokenOk = Common::Utils::verifyToken(ainfo.secret, token);
 		}
 
 		auto& counters = m_badLoginAttempts[ainfo.ainfoClient.accountId];
@@ -218,13 +226,20 @@ namespace Auth
 		{
 			if (auto decrypted = Common::Utils::decryptEmail(ainfo.encryptedEmail, Common::Utils::SetupParser::getInstance().getGeneralSetup().emailSecret))
 			{
-				Common::Utils::sendEmail(decrypted.value(), "[Security] Your ToyBattles account was banned", "This is an automatic notification. " 
-					"For security reasons, your ToyBattles account was suspended due to 5 wrong login attempts in the game (5 wrong 2FA tokens used");
+				m_emailDispatcher.sendEmailAsync({ decrypted.value() }, "[Security] Your ToyBattles account was banned",          
+					"This is an automatic notification. For security reasons, your TB account was suspended due to 5 wrong login attempts in the game (5 wrong 2FA tokens used).",
+					[accountId = ainfo.ainfoClient.accountId, this]() {
+						m_persistentDatabase.logGameEvent("EmailNotification",
+							"Failed to send email to target after the account was locked due to too many 2FA wrong attempts for accountID: " + std::to_string(accountId),
+							"HIGH");
+					}
+				);
 			}
 			else
 			{
-				m_persistentDatabase.logGameEvent("EmailNotification",
-					"Failed to send email after the account was locked due to too many 2FA wrong attempts for accountID: " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
+				m_persistentDatabase.logGameEvent("EmailDecryption",
+					"Failed to decrypt email to contact target after their account was locked due to too many 2FA wrong attempts for accountID: " 
+					+ std::to_string(ainfo.ainfoClient.accountId), "HIGH");
 			}
 			if (!tryLockAccount(ainfo.ainfoClient.accountId, false))
 			{
@@ -276,28 +291,6 @@ namespace Auth
 	{
 		asio::ip::network_v4 test_network(ip, network.prefix_length());
 		return network.canonical().address() == test_network.canonical().address();
-	}
-
-	bool AuthService::verifyToken(const std::string& encryptedSecret, const std::optional<std::string>& token)
-	{
-		if (encryptedSecret.empty() || !token.has_value()) return false;
-
-		auto optSecret = Common::Utils::decrypt2FASecret(encryptedSecret, Common::Utils::SetupParser::getInstance().getGeneralSetup().twoFaSecret);
-		if (!optSecret) return false;
-
-		const int t_interval = 30;
-		std::time_t now = std::time(nullptr);
-
-		for (int i = -1; i <= 1; ++i)
-		{
-			auto expectedToken = auth::generateToken(optSecret.value(), now + i * t_interval, t_interval);
-			std::ostringstream oss;
-			oss << std::setw(6) << std::setfill('0') << expectedToken;
-
-			if (oss.str() == token.value()) return true;
-		}
-
-		return false;
 	}
 
 	bool AuthService::tryLockAccount(std::uint32_t accountId, bool isGraded) 

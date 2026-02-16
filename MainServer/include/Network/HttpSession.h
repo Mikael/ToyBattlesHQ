@@ -158,11 +158,7 @@ namespace Main
                 {
                     if (m_request.target() == "/ban")
                     {
-                        handleBanCommand(responseBody, statusCode, m_request, false);
-                    }
-                    else if (m_request.target() == "/cheatban")
-                    {
-                        handleBanCommand(responseBody, statusCode, m_request, true);
+                        handleBanCommand(responseBody, statusCode, m_request);
                     }
                     else if (m_request.target() == "/announce")
                     {
@@ -313,7 +309,7 @@ namespace Main
                 - 500: exception thrown in the server
                Response body: contains message (success or error)
            */
-            void handleBanCommand(std::string& responseBody, http::status& statusCode, const http::request<http::string_body>& m_request, bool isCheatBan)
+            void handleBanCommand(std::string& responseBody, http::status& statusCode, const http::request<http::string_body>& m_request)
             {
                 try
                 {
@@ -371,19 +367,11 @@ namespace Main
 
                     if (targetSession)
                     {
-                        if (isCheatBan)
-                        {
-                            targetSession->banAccount(9999, "AUTOMATIC_CHEAT_BAN", true);
-                            targetSession->closeSocket();
-                        }
-                        else
-                        {
-                            m_sessionsManager.removeSession(targetSession->getId());
-                            Common::Network::Packet packet;
-                            packet.setCommand(73, 0, 1, 0);
-                            packet.setData(nullptr, 0);
-                            targetSession->asyncWrite(packet);
-                        }
+                        m_sessionsManager.removeSession(targetSession->getId());
+                        Common::Network::Packet packet;
+                        packet.setCommand(73, 0, 1, 0);
+                        packet.setData(nullptr, 0);
+                        targetSession->asyncWrite(packet);
                         statusCode = http::status::ok;
                         responseBody = std::format("{} '{}' found online and banned", banByAccountId ? "Account ID" : "Player", targetIdentifier);
                     }

@@ -40,7 +40,7 @@ namespace Main
 
 			void execute(const std::string& command, std::shared_ptr<Main::Network::Session> session,
 				MN::SessionsManager& sessionsManager, MC::RoomsManager&, MP::MainScheduler& scheduler, std::uint32_t,
-				Main::MainServer&) override
+				Main::MainServer& srv) override
 			{
 				if (!parseCommand(command))
 				{
@@ -48,7 +48,7 @@ namespace Main
 					return;
 				}
 
-				auto usernameExists = scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::playerExistsByUsername, 
+				auto usernameExists = scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::playerExistsByUsername,
 					m_targetUsername);
 				if (usernameExists)
 				{
@@ -94,30 +94,32 @@ namespace Main
 				const bool enhancedSecurity =
 					Common::Utils::SetupParser::getInstance().getAuthSetup().enhancedSecurity;
 
-				std::thread([tempPassword,secret2FA,email = m_targetEmail,username = m_targetUsername,session,enhancedSecurity]()
-					{
-						std::ostringstream emailBody;
-						emailBody << "<html><body>";
-						emailBody << "<p>Hello " << username << ",</p>";
-						emailBody << "<p>Your account has been created successfully!</p>";
-						emailBody << "<p><b>Temporary password:</b> " << tempPassword << "</p>";
+				std::ostringstream emailBody;
+				emailBody << "<html><body>";
+				emailBody << "<p>Hello " << m_targetUsername << ",</p>";
+				emailBody << "<p>Your account has been created successfully!</p>";
+				emailBody << "<p><b>Temporary password:</b> " << tempPassword << "</p>";
 
-						if (enhancedSecurity)
-						{
-							emailBody << "<p><b>2FA Secret:</b> " << secret2FA << "</p>";
-							emailBody << "<p>To enable 2FA, open your authenticator app and manually enter the secret above (Time-based 2FA).</p>";
-							emailBody << "<p>You can change your password in-game with the command: /changepw <NewPassword> <2FaToken></p>";
-						}
+				if (enhancedSecurity)
+				{
+					emailBody << "<p><b>2FA Secret:</b> " << secret2FA << "</p>";
+					emailBody << "<p>To enable 2FA, open your authenticator app and manually enter the secret above (Time-based 2FA).</p>";
+					emailBody << "<p>You can change your password in-game with the command: /changepw "
+						"&lt;CurrentPassword&gt; &lt;2FaToken&gt; &lt;NewPassword&gt;</p>";
+					emailBody << "<p><b>Important:</b> When logging in, you must append your 2FA token to your username as follows:</p>";
+					emailBody << "<p><i>Username+2faToken</i><br>";
+					emailBody << "Example: if your username is <b>test</b> and your 2FA token is <b>111111</b>, use <b>test+111111</b> as the username.</p>";
+				}
 
-						emailBody << "<p>Keep this information secure and eventually delete this email once you saved it.</p>";
-						emailBody << "</body></html>";
+				emailBody << "<p>If you lose access to your account, you can request a password and 2FA reset by contacting us at "
+					<< "<a href=\"mailto:support@toybattles.net\">support@toybattles.net</a>.</p>";
+				emailBody << "<p>Keep this information secure and eventually delete this email once you have saved it.</p>";
+				emailBody << "</body></html>";
 
-						bool emailSent = Common::Utils::sendEmail(email, "Your New TB Account", emailBody.str());
-						if (!emailSent)
-						{
-							session->sendMessage("warning: account created but failed to send email with password/2FA info");
-						}
-					}).detach();
+				srv.emailDispatcher.sendEmailAsync({ m_targetEmail }, "Your New TB Account", emailBody.str(),
+					[session]() {
+						session->sendMessage("warning: account created but failed to send email with password/2FA info");
+					});
 			}
 		};
 

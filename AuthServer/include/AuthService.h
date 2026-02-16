@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <optional>
 #include "asio.hpp"
+#include <EmailDispatcher.h>
 
 namespace Auth
 {
@@ -15,10 +16,13 @@ namespace Auth
 	{
 	private:
 		Auth::Persistence::PersistentDatabase& m_persistentDatabase;
+		Common::Utils::EmailDispatcher& m_emailDispatcher;
 		std::unordered_map<std::uint32_t, Auth::Structures::LoginWrongAttempts> m_badLoginAttempts; // [aid] [LoginWrongAttempts]
 
 	public:
-		AuthService(Auth::Persistence::PersistentDatabase& persistentDatabase) : m_persistentDatabase{ persistentDatabase }
+		AuthService(Auth::Persistence::PersistentDatabase& persistentDatabase, Common::Utils::EmailDispatcher& emailDispatcher)
+			: m_persistentDatabase{ persistentDatabase }
+			, m_emailDispatcher{ emailDispatcher }
 		{
 		}
 
@@ -31,7 +35,6 @@ namespace Auth
 			const std::string& ip, const std::string& hwid);
 		Auth::Enums::Login authorizeUngraded(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token, const std::string& clientPw);
 
-		bool verifyToken(const std::string& secret, const std::optional<std::string>& token);
 		bool tryLockAccount(std::uint32_t accountId, bool isGraded);
 		std::uint32_t generateAccountKey() const;
 		bool isIpInSubnet(const asio::ip::network_v4& network, const asio::ip::address_v4& ip) const;

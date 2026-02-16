@@ -10,7 +10,7 @@ namespace Auth
 		: m_io_context(io_context)
 		, m_acceptor{ io_context, tcp::endpoint(asio::ip::address::from_string(ip), port) }
 		, m_database()
-		, m_authService{m_database}
+		, m_authService{m_database, m_emailDispatcher}
 	{
 		Common::Network::Session::addCallback<Common::Network::PacketType::ENCRYPTED, Auth::Network::Session>(22, [&](const Common::Network::Packet& request,
 			std::shared_ptr<Auth::Network::Session> session) { Auth::Handlers::handleAuthUserInformation(request, session, m_authService); });

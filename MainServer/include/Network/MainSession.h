@@ -23,6 +23,7 @@
 #include <algorithm>
 #include "../Structures/TradeSystem/TradeSystemItem.h"
 #include <AntiCheat/AntiCheat.h>
+#include <Enums/PlayerEnums.h>
 
 namespace Main
 {
@@ -48,6 +49,10 @@ namespace Main
 			std::uint64_t m_matchStartTime{};
 			bool m_hasCheckedMatchBan = false;
 			bool m_isInvisible{};
+
+			std::uint32_t m_totalWrongPasswordReset{};
+			std::uint32_t m_totalWrong2FaReset{};
+
 			std::string m_hwid{ "" };
 			std::uint64_t m_hwidLastUpdatedTimestamp{};
 			std::string m_gradedHwid{ "" };
@@ -335,7 +340,7 @@ namespace Main
 
 			void setLatestItemNumber(std::uint64_t itemNum);
 
-			bool banAccount(std::uint64_t daysDuration, const std::string& reason, bool isMatchBan = false);
+			bool banAccount(std::uint64_t daysDuration, const std::string& reason, Common::Enums::PlayerGrade grade = Common::Enums::GRADE_MOD);
 
 			void completeTutorial();
 
