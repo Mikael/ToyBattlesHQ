@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: 0eb6731ad2341d0783955d4916f3657c0d90ba66
 
       - name: Setup C++ environment
         uses: aminya/setup-cpp@v1
