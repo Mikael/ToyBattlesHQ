@@ -51,6 +51,17 @@ namespace Main
 			void updatePlayerCurrencyByType(std::uint32_t accountID, std::uint32_t newAmount, Main::Enums::ItemCurrencyType currencyType);
 			void addPlayerAchievement(std::uint32_t accountID, std::uint32_t achievementIndex);
 			std::optional<std::string> getColumnByAid(const std::string& columnName, std::uint32_t accountID);
+			bool addClan(std::uint32_t leaderAid, const std::string& clanName, int clanFrontIcon, int clanBackIcon);
+			Main::Enums::ClanEnlist enlistToClan(std::uint32_t accountId, const std::string& clanName);
+			std::pair<Main::Enums::GetPendingRequestsResult, std::vector<std::string>> getPendingRequests(std::uint32_t accountId);
+			Main::Enums::AcceptClanRequestResult acceptClanRequest(std::uint32_t ownerAccountId, const std::string& targetNickname);
+			Main::Enums::DenyClanRequestResult denyClanRequest(std::uint32_t ownerAccountId, const std::string& targetNickname);
+			Main::Enums::KickClanMemberResult kickClanMember(std::uint32_t ownerAccountId, const std::string& targetNickname);
+			Main::Enums::LeaveClanResult leaveClan(std::uint32_t accountId);
+			Main::Enums::DisbandClanResult disbandClan(std::uint32_t ownerAccountId);
+			Main::Enums::TransferOwnershipResult transferOwnership(std::uint32_t ownerAccountId, const std::string& targetNickname);
+			bool clanExists(const std::string& clanName);
+			bool isUserInClan(std::uint32_t accountID);
 			bool updatePasswordByAid(std::uint32_t accountID, const std::string& newHashedPassword);
 			bool updateSecretByAid(std::uint32_t accountID, const std::string& newEncryptedSecret);
 			void logMessage(std::uint32_t accountID, const std::string& message);
@@ -278,7 +289,7 @@ namespace Main
 
 			bool isCommandEventExpired();
 
-			bool getGradedHwid(std::uint32_t accountId, std::string& outHash, std::string& outSalt) const;
+			std::optional<std::pair<std::string, std::string>> getGradedHwid(std::uint32_t accountId);
 
 			~PersistentDatabase()
 			{
