@@ -20,6 +20,7 @@
 #include "Utils/SetupParser.h"
 #include <cstring> 
 #include <Utils.h>
+#include <regex>
 
 namespace Main
 {
