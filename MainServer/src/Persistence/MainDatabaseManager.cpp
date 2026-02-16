@@ -909,6 +909,123 @@ namespace Main
             }
         }
 
+        Main::Enums::UpdateClanIconResult PersistentDatabase::updateClanIcons(std::uint32_t ownerAccountId, std::optional<std::uint16_t> newFrontIcon,
+            std::optional<std::uint16_t> newBackIcon)
+        {
+            try
+            {
+                if (!newFrontIcon.has_value() && !newBackIcon.has_value())
+                {
+                    return Main::Enums::UpdateClanIconResult::DB_ERROR; 
+                }
+
+                if (newFrontIcon.has_value())
+                {
+                    std::uint16_t frontIcon = newFrontIcon.value();
+                    if (frontIcon < 1 || frontIcon > 295)
+                    {
+                        return Main::Enums::UpdateClanIconResult::INVALID_FRONT_ICON;
+                    }
+                }
+
+                if (newBackIcon.has_value())
+                {
+                    std::uint16_t backIcon = newBackIcon.value();
+                    if (backIcon < 1 || backIcon > 169)
+                    {
+                        return Main::Enums::UpdateClanIconResult::INVALID_BACK_ICON;
+                    }
+                }
+
+                TransactionGuard guard(m_transactionalCon.get());
+
+                std::unique_ptr<sql::PreparedStatement> ownerStmt(m_transactionalCon->prepareStatement(
+                    "SELECT u.ClanID, c.LeaderAid "
+                    "FROM Users u "
+                    "JOIN Clans c ON u.ClanID = c.ClanId "
+                    "WHERE u.AccountID = ?"));
+
+                ownerStmt->setUInt(1, ownerAccountId);
+                std::unique_ptr<sql::ResultSet> ownerResult(ownerStmt->executeQuery());
+
+                if (!ownerResult->next())
+                {
+                    return Main::Enums::UpdateClanIconResult::NOT_IN_CLAN;
+                }
+
+                std::uint32_t clanId = ownerResult->getUInt("ClanID");
+                std::uint32_t leaderAid = ownerResult->getUInt("LeaderAid");
+
+                if (clanId == 0)
+                {
+                    return Main::Enums::UpdateClanIconResult::NOT_IN_CLAN;
+                }
+
+                if (leaderAid != ownerAccountId)
+                {
+                    return Main::Enums::UpdateClanIconResult::NOT_LEADER;
+                }
+
+                std::string query = "UPDATE Clans SET ";
+                std::vector<std::string> setClauses;
+                std::vector<std::pair<std::string, std::uint16_t>> parameters;
+
+                if (newFrontIcon.has_value())
+                {
+                    setClauses.push_back("ClanFrontIcon = ?");
+                    parameters.emplace_back("front", newFrontIcon.value());
+                }
+                if (newBackIcon.has_value())
+                {
+                    setClauses.push_back("ClanBackIcon = ?");
+                    parameters.emplace_back("back", newBackIcon.value());
+                }
+
+                for (size_t i = 0; i < setClauses.size(); ++i)
+                {
+                    query += setClauses[i];
+                    if (i < setClauses.size() - 1)
+                    {
+                        query += ", ";
+                    }
+                }
+
+                query += " WHERE ClanId = ?";
+
+                std::unique_ptr<sql::PreparedStatement> updateStmt(m_transactionalCon->prepareStatement(query));
+
+                int paramIndex = 1;
+                if (newFrontIcon.has_value())
+                {
+                    updateStmt->setInt(paramIndex++, newFrontIcon.value());
+                }
+                if (newBackIcon.has_value())
+                {
+                    updateStmt->setInt(paramIndex++, newBackIcon.value());
+                }
+                updateStmt->setUInt(paramIndex, clanId);
+                updateStmt->executeUpdate();
+                guard.commit();
+
+                return Main::Enums::UpdateClanIconResult::SUCCESS;
+            }
+            catch (const sql::SQLException& e)
+            {
+                ::Utils::Logger::log("MariaDB exception in updateClanIcons: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateClanIcons");
+                return Main::Enums::UpdateClanIconResult::DB_ERROR;
+            }
+        }
+
+        Main::Enums::UpdateClanIconResult PersistentDatabase::updateClanFrontIcon(std::uint32_t ownerAccountId, std::uint16_t newFrontIcon)
+        {
+            return updateClanIcons(ownerAccountId, newFrontIcon, std::nullopt);
+        }
+
+        Main::Enums::UpdateClanIconResult PersistentDatabase::updateClanBackIcon(std::uint32_t ownerAccountId, std::uint16_t newBackIcon)
+        {
+            return updateClanIcons(ownerAccountId, std::nullopt, newBackIcon);
+        }
+
         bool PersistentDatabase::clanExists(const std::string& clanName)
         {
             try

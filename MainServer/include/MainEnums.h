@@ -468,6 +468,16 @@ namespace Main
 			TARGET_IS_SELF,      
 			DB_ERROR          
 		};
+
+		enum class UpdateClanIconResult
+		{
+			SUCCESS,
+			NOT_IN_CLAN,          
+			NOT_LEADER,            
+			INVALID_BACK_ICON,    
+			INVALID_FRONT_ICON,    
+			DB_ERROR            
+		};
 	}
 }
 #endif

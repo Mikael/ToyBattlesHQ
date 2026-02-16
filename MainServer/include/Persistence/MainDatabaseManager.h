@@ -60,6 +60,10 @@ namespace Main
 			Main::Enums::LeaveClanResult leaveClan(std::uint32_t accountId);
 			Main::Enums::DisbandClanResult disbandClan(std::uint32_t ownerAccountId);
 			Main::Enums::TransferOwnershipResult transferOwnership(std::uint32_t ownerAccountId, const std::string& targetNickname);
+			Main::Enums::UpdateClanIconResult updateClanIcons(std::uint32_t ownerAccountId, std::optional<std::uint16_t> newFrontIcon,
+				std::optional<std::uint16_t> newBackIcon);
+			Main::Enums::UpdateClanIconResult updateClanFrontIcon(std::uint32_t ownerAccountId, std::uint16_t newFrontIcon);
+			Main::Enums::UpdateClanIconResult updateClanBackIcon(std::uint32_t ownerAccountId, std::uint16_t newBackIcon);
 			bool clanExists(const std::string& clanName);
 			bool isUserInClan(std::uint32_t accountID);
 			bool updatePasswordByAid(std::uint32_t accountID, const std::string& newHashedPassword);
