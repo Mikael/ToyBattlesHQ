@@ -20,6 +20,7 @@ PACK_PUSH(1)
             std::uint64_t kitdrop : 1 = 1;
             std::uint64_t timelimited : 5 = 0;
             std::uint64_t weaponlimited : 4 = 0;
+            std::uint64_t unused_padding : 28 = 0;
         };
 PACK_POP()
 
@@ -31,6 +32,7 @@ PACK_PUSH(1)
             std::uint64_t team_balance : 1 = 0;
             std::uint64_t state : 2 = 3;
             std::uint64_t weaponlimited : 4 = 0;
+            std::uint64_t unused_padding : 47 = 0;
         };
 PACK_POP()
 
@@ -41,6 +43,7 @@ PACK_PUSH(1)
             std::uint64_t state : 2 = 3;
             std::uint64_t timelimited : 5 = 0;
             std::uint64_t weaponlimited : 4 = 0;
+            std::uint64_t unused_padding : 8 = 0;
         };
 PACK_POP()
     }

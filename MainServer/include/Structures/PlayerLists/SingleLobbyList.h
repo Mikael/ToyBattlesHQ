@@ -16,6 +16,7 @@ PACK_PUSH(1)
             std::uint64_t clanLogoFrontId : 16;
             std::uint64_t clanLogoBackId : 14;
             std::uint64_t level : 7;
+            std::uint64_t unused_padding : 27 = 0;
         };
 PACK_POP()
 	}

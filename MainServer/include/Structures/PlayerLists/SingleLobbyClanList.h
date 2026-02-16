@@ -14,6 +14,7 @@ PACK_PUSH(1)
             char name[16]{};
             UniqueId uniqueId{};
             std::uint16_t level : 7;
+            std::uint16_t unused_padding : 9 = 0;
             std::uint16_t unkown = 0;
         };
 PACK_POP()
