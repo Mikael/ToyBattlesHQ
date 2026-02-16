@@ -21,7 +21,7 @@ namespace Auth
 		std::unordered_map<std::uint32_t, Auth::Structures::LoginWrongAttempts> m_badLoginAttempts; // [aid] [LoginWrongAttempts]
 
 	public:
-		AuthService(Auth::Persistence::PersistentDatabase& persistentDatabase, Common::Utils::EmailDispatcher emailDispatcher)
+		AuthService(Auth::Persistence::PersistentDatabase& persistentDatabase, Common::Utils::EmailDispatcher& emailDispatcher)
 			: m_persistentDatabase{ persistentDatabase }
 			, m_emailDispatcher{ emailDispatcher }
 		{
