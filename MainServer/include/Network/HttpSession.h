@@ -597,7 +597,6 @@ namespace Main
                     auto tokenOpt = extractToken(m_request);
                     if (!tokenOpt)
                     {
-                        std::cout << "!tokenOpt  \n";
                         responseBody = "Invalid request (invalid JWT token provided)";
                         statusCode = http::status::unauthorized;
                         return;
@@ -606,7 +605,6 @@ namespace Main
                     const std::string secret = "secret_temp";
                     if (!verifyTokenAndGrade(*tokenOpt, secret, 3))
                     {
-                        std::cout << "!verifyTokenAndGrade\n";
                         responseBody = "Invalid request (invalid JWT token provided or too low grade)";
                         statusCode = http::status::unauthorized;
                         return;
@@ -627,7 +625,6 @@ namespace Main
 
                     if (onlinePlayers.empty())
                     {
-                        std::cout << "No players online\n";
                         responseBody = "No players currently online";
                         statusCode = http::status::ok;
                     }

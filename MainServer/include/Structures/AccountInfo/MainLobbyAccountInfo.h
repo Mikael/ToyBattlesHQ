@@ -44,6 +44,7 @@ PACK_PUSH(1)
 			std::uint32_t unknown : 4 = 0;
 			std::uint32_t unused6 : 9 = 0;
 			std::uint32_t level : 7 = 0;
+			std::uint32_t unused_padding : 8 = 0;
 			std::uint32_t vipExperience{}; // client does vipExperience - 1 to this one 
 			std::array<std::uint32_t, 17> unknown2{};
 
