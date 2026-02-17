@@ -50,6 +50,11 @@ namespace Main
             try { stmt->execute("ALTER TABLE Clans ADD CONSTRAINT uq_clan_name UNIQUE (ClanName)"); } catch (...) {}       
             try { stmt->execute("ALTER TABLE Users ADD CONSTRAINT uq_users_username UNIQUE (Username)"); } catch (...) {}
             try { stmt->execute("ALTER TABLE Users ADD CONSTRAINT uq_users_nickname UNIQUE (Nickname)"); } catch (...) {}
+
+            try { stmt->execute("ALTER TABLE Users ADD COLUMN IF NOT EXISTS LastIpSalt VARCHAR(128) NULL DEFAULT NULL"); } catch (...) {}
+            try { stmt->execute("ALTER TABLE Users ADD COLUMN IF NOT EXISTS HWIDSalt VARCHAR(128) NULL DEFAULT NULL"); } catch (...) {}
+            try { stmt->execute("ALTER TABLE Users ADD COLUMN IF NOT EXISTS HWIDGraded VARCHAR(128) NULL DEFAULT NULL"); } catch (...) {}
+            try { stmt->execute("ALTER TABLE Users ADD COLUMN IF NOT EXISTS HWIDGradedSalt VARCHAR(128) NULL DEFAULT NULL"); } catch (...) {}
         }
 
         void PersistentDatabase::connectWithRetry()
