@@ -1,3 +1,13 @@
+# Notice
+This documentation is currently behind the latest changes.
+- Documentation explaining the new changes is completely missing.
+- The setup documentation for new features is also missing.
+- The client executable working with this emulator is missing.
+- The externalLibraries/cgd_original is outdated.
+
+Adding this new documentation may take a while, so bear with us...
+
+
 ![C++ CI](https://github.com/SoWeBegin/ToyBattlesHQ/actions/workflows/ci.yml/badge.svg)
 ![Release](https://img.shields.io/github/v/release/SoWeBegin/ToyBattlesHQ)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
