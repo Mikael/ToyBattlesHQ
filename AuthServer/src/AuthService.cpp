@@ -41,7 +41,6 @@ namespace Auth
 				m_persistentDatabase.logGameEvent("AuthGradedLogin",
 					"Failed login: Graded account accessed from invalid auth port, accountID: " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
 				return Auth::Enums::Login::INCORRECT;
-				return Auth::Enums::Login::INCORRECT;
 			}
 
 			if (plainHwid.empty())
