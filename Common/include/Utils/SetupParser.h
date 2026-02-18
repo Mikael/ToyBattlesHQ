@@ -26,7 +26,7 @@ namespace Common
             std::uint32_t port;
             std::uint32_t gradedPort;
             bool enhancedSecurity;
-            std::string gradedAccessSubnet;
+            std::string vpnIp;
         };
 
         struct MainSetup

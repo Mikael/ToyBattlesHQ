@@ -159,9 +159,9 @@ namespace Common
 
             if (authServer["EnhancedSecurity"].as<bool>())
             {
-                if (!authServer.contains("GradedAccessSubnet") || authServer["GradedAccessSubnet"].as<std::string>().empty())
+                if (!authServer.contains("VpnIp") || authServer["VpnIp"].as<std::string>().empty())
                 {
-                    ::Utils::Logger::log("Missing or empty GradedAccessSubnet in 'AuthServer' section while EnhancedSecurity is true", ::Utils::LogType::Error, "SetupParser::checkAuthSection");
+                    ::Utils::Logger::log("Missing or empty VpnIp in 'AuthServer' section while EnhancedSecurity is true", ::Utils::LogType::Error, "SetupParser::checkAuthSection");
                     return false;
                 }
             }
@@ -425,7 +425,7 @@ namespace Common
             auth.enhancedSecurity = m_iniFile["AuthServer"]["EnhancedSecurity"].as<bool>();
 
             if (auth.enhancedSecurity)
-                auth.gradedAccessSubnet = m_iniFile["AuthServer"]["GradedAccessSubnet"].as<std::string>();
+                auth.vpnIp = m_iniFile["AuthServer"]["VpnIp"].as<std::string>();
 
             return auth;
         }

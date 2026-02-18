@@ -43,7 +43,6 @@ namespace Auth
 
 		if (authSetup.enhancedSecurity)
 		{
-			asio::ip::network_v4 vpnNet = asio::ip::make_network_v4(authSetup.gradedAccessSubnet);
 			std::error_code ec;
 			auto clientIp = asio::ip::make_address_v4(plainIp, ec);
 
@@ -51,23 +50,6 @@ namespace Auth
 			{
 				m_persistentDatabase.logGameEvent("AuthGradedLogin",
 					"Failed login: No PlainIp found for graded account " + std::to_string(ainfo.ainfoClient.accountId), "MEDIUM");
-				return Auth::Enums::Login::INCORRECT;
-			}
-
-			if (!isIpInSubnet(vpnNet, clientIp))
-			{
-				std::cout << "User PlainIp: " << plainIp << '\n';
-				m_emailDispatcher.sendAlertAsync("[MEDIUM Alert] TB - Graded Login Wrong VPN IP",
-					"High Level Alert: Graded Account(ID: " + std::to_string(ainfo.ainfoClient.accountId) + ") accessed with the wrong VPN IP, access was blocked",
-
-					[accountId = ainfo.ainfoClient.accountId, this]() {
-						m_persistentDatabase.logGameEvent("EmailGraded",
-							"Failed to send admin notification after wrong IP subnet at login for graded accountID: " + std::to_string(accountId), "HIGH");
-					}
-				);
-
-				m_persistentDatabase.logGameEvent("AuthGradedLogin",
-					"Failed login: IP " + plainIp + " not in allowed subnet for graded account " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
 				return Auth::Enums::Login::INCORRECT;
 			}
 
