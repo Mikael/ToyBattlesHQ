@@ -83,7 +83,7 @@ namespace Common
 				try
 				{
 					m_ip = m_socket.remote_endpoint().address().to_string();
-					m_port = m_socket.remote_endpoint().port();
+					m_port = m_socket.local_endpoint().port();
 				}
 				catch (const std::exception& e)
 				{
