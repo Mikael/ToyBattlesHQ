@@ -14,16 +14,32 @@ namespace Auth
 	using namespace Common::Utils;
 
 	Auth::Enums::Login AuthService::authorizeGraded(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token,
-		const std::string& plainPw, const std::string& plainIp, const std::string& plainHwid)
+		const std::string& plainPw, const std::string& plainIp, const std::string& plainHwid, std::uint_least16_t port)
 	{
+		auto& authSetup = Common::Utils::SetupParser::getInstance().getAuthSetup();
+		
+		if (port != authSetup.gradedPort)
+		{
+			m_emailDispatcher.sendAlertAsync("[MEDIUM Alert] TB - Graded Login Wrong Port",
+				"High Level Alert: Graded Account(ID: " + std::to_string(ainfo.ainfoClient.accountId) + ") accessed with the wrong port, access was blocked",
+
+				[accountId = ainfo.ainfoClient.accountId, this]() {
+					m_persistentDatabase.logGameEvent("EmailGraded",
+					"Failed to send admin notification after wrong port at login for graded accountID: " + std::to_string(accountId), "HIGH");
+				}
+			);
+
+			m_persistentDatabase.logGameEvent("AuthGradedLogin",
+				"Failed login: IP " + plainIp + " not in allowed subnet for graded account " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
+			return Auth::Enums::Login::INCORRECT;
+			return Auth::Enums::Login::INCORRECT;
+		}
 		if (ainfo.secret.empty())
 		{
 			m_persistentDatabase.logGameEvent("AuthGradedLogin",
 				"Failed login: missing mandatory secret for graded account " + std::to_string(ainfo.ainfoClient.accountId), "MEDIUM");
 			return Auth::Enums::Login::INCORRECT;
 		}
-
-		auto& authSetup = Common::Utils::SetupParser::getInstance().getAuthSetup();
 
 		if (authSetup.enhancedSecurity)
 		{
@@ -362,8 +378,8 @@ namespace Auth
 		return false;
 	}
 
-	std::expected<Auth::Structures::BasicAccountInfo, Auth::Enums::Login>
-		AuthService::login(const std::string& username, const std::string& password, const std::string& plainIp, const std::string& plainHwid)
+	std::expected<Auth::Structures::BasicAccountInfo, Auth::Enums::Login> 
+		AuthService::login(const std::string& username, const std::string& password, const std::string& plainIp, std::uint_least16_t port, const std::string& plainHwid)
 	{
 		const auto parsed = parseUsernameAnd2FA(username);
 		const auto result = m_persistentDatabase.getCompletePlayerInfo(parsed.username);
@@ -371,7 +387,7 @@ namespace Auth
 
 		Auth::Structures::BasicAccountInfo userInfo = result.value();
 		Auth::Enums::Login authResult = (userInfo.grade >= 3)
-			? authorizeGraded(userInfo, parsed.token, password, plainIp, plainHwid)
+			? authorizeGraded(userInfo, parsed.token, password, plainIp, plainHwid, port)
 			: authorizeUngraded(userInfo, parsed.token, password);
 
 		if (authResult != Auth::Enums::SUCCESS)

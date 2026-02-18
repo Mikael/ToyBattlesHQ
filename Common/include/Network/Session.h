@@ -51,6 +51,7 @@ namespace Common
 			std::size_t m_id = 0;
 			std::uint32_t m_aid = 0;
 			std::string m_ip;
+			std::uint_least16_t m_port;
 
 		public:
 			std::string m_hwid = "";
@@ -82,10 +83,12 @@ namespace Common
 				try
 				{
 					m_ip = m_socket.remote_endpoint().address().to_string();
+					m_port = m_socket.remote_endpoint().port();
 				}
 				catch (const std::exception& e)
 				{
 					m_ip = "Unknown";
+					m_port = 0;
 				}
 
 				auto newID = sessionIdManager.getNewSessionID();
@@ -182,6 +185,7 @@ namespace Common
 			}
 
 			const std::string& getIp() const noexcept { return m_ip; }
+			const std::uint_least16_t getPort() const noexcept { return m_port; }
 		};
 
 	}

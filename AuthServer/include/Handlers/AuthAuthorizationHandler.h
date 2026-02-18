@@ -21,7 +21,7 @@ namespace Auth
             const std::string username = std::string(reinterpret_cast<const char*>(request.getData() + 48));
             const std::string password = std::string(reinterpret_cast<const char*>(request.getData() + 4));
             
-            auto result = authService.login(username, password, session->getIp(), session->m_hwid);
+            auto result = authService.login(username, password, session->getIp(), session->getPort(), session->m_hwid);
 
             Common::Network::Packet response;
             response.setTcpHeader(request.getSession(), Common::Enums::USER_LARGE_ENCRYPTION);

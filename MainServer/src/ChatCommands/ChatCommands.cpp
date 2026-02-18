@@ -27,26 +27,21 @@ namespace Main
                 {
                     auto now = std::chrono::system_clock::now();
                     auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
-					asio::ip::network_v4 vpnNet = asio::ip::make_network_v4(authSetup.gradedAccessSubnet);
 					std::error_code ec;
-					auto clientIp = asio::ip::make_address_v4(session->getIp(), ec);
 
                     const bool hwidCorrect = (Common::Utils::hashSha256(session->m_hwid, session->m_gradedHwidSalt) == session->m_gradedHwid);
                     const bool updatedRecently = (nowSeconds - session->m_hwidLastUpdatedTimestamp <= 20);
-					const bool isIpAllowed = !session->getIp().empty() && !ec && isIpInSubnet(vpnNet, clientIp);
 					
-                    if (!hwidCorrect || !updatedRecently || !isIpAllowed)
+                    if (!hwidCorrect || !updatedRecently)
                     {
                         session->closeSocket();
 
 						const std::string subject = "[Security Alert HIGH] ChatCommand Validation Failed";
-						std::string body = std::format("A graded account failed HWID/IP checks while using graded in-game commands:\n"
+						std::string body = std::format("A graded account failed HWID checks while using graded in-game commands:\n"
 							"hwidCorrect: {}\n"
-							"updatedRecently: {}\n"
-							"isIpAllowed: {}\n",
+							"updatedRecently: {}\n",
 							hwidCorrect ? "true" : "false",
-							updatedRecently ? "true" : "false",
-							isIpAllowed ? "true" : "false"
+							updatedRecently ? "true" : "false"
 						);
 
 						mainServer.emailDispatcher.sendAlertAsync(subject, body,

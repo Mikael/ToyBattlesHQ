@@ -19,14 +19,18 @@ namespace Auth
 	private:
 		ioContext& m_io_context;
 		tcp::acceptor m_acceptor;
+		tcp::acceptor m_gradedAcceptor;
 		std::optional<tcp::socket> m_socket;
+		std::optional<tcp::socket> m_gradedSocket;
 		Auth::Persistence::PersistentDatabase m_database;
 		Auth::AuthService m_authService;
 		Common::Utils::EmailDispatcher m_emailDispatcher;
 
 	public:
-		AuthServer(ioContext& io_context, const std::string& ip, std::uint16_t port);
-		void asyncAccept();
+		AuthServer(ioContext& io_context, const std::string& ip, std::uint16_t port, std::uint16_t gradedPort);
+		void asyncAccept();	
+		void asyncAcceptUngraded();
+		void asyncAcceptGraded();
 	};
 }
 
