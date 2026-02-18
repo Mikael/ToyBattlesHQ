@@ -18,22 +18,6 @@ namespace Auth
 	{
 		auto& authSetup = Common::Utils::SetupParser::getInstance().getAuthSetup();
 		
-		if (port != authSetup.gradedPort)
-		{
-			m_emailDispatcher.sendAlertAsync("[MEDIUM Alert] TB - Graded Login Wrong Port",
-				"High Level Alert: Graded Account(ID: " + std::to_string(ainfo.ainfoClient.accountId) + ") accessed with the wrong port, access was blocked",
-
-				[accountId = ainfo.ainfoClient.accountId, this]() {
-					m_persistentDatabase.logGameEvent("EmailGraded",
-					"Failed to send admin notification after wrong port at login for graded accountID: " + std::to_string(accountId), "HIGH");
-				}
-			);
-
-			m_persistentDatabase.logGameEvent("AuthGradedLogin",
-				"Failed login: IP " + plainIp + " not in allowed subnet for graded account " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
-			return Auth::Enums::Login::INCORRECT;
-			return Auth::Enums::Login::INCORRECT;
-		}
 		if (ainfo.secret.empty())
 		{
 			m_persistentDatabase.logGameEvent("AuthGradedLogin",
@@ -43,13 +27,20 @@ namespace Auth
 
 		if (authSetup.enhancedSecurity)
 		{
-			std::error_code ec;
-			auto clientIp = asio::ip::make_address_v4(plainIp, ec);
-
-			if (plainIp.empty() || ec)
+			if (port != authSetup.gradedPort)
 			{
+				m_emailDispatcher.sendAlertAsync("[MEDIUM Alert] TB - Graded Login Wrong Port",
+					"High Level Alert: Graded Account(ID: " + std::to_string(ainfo.ainfoClient.accountId) + ") accessed with the wrong port, access was blocked",
+
+					[accountId = ainfo.ainfoClient.accountId, this]() {
+						m_persistentDatabase.logGameEvent("EmailGraded",
+						"Failed to send admin notification after wrong port at login for graded accountID: " + std::to_string(accountId), "HIGH");
+					}
+				);
+
 				m_persistentDatabase.logGameEvent("AuthGradedLogin",
-					"Failed login: No PlainIp found for graded account " + std::to_string(ainfo.ainfoClient.accountId), "MEDIUM");
+					"Failed login: IP " + plainIp + " not in allowed subnet for graded account " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
+				return Auth::Enums::Login::INCORRECT;
 				return Auth::Enums::Login::INCORRECT;
 			}
 
