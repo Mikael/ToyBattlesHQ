@@ -39,7 +39,7 @@ namespace Auth
 				);
 
 				m_persistentDatabase.logGameEvent("AuthGradedLogin",
-					"Failed login: IP " + plainIp + " not in allowed subnet for graded account " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
+					"Failed login: Graded account accessed from invalid auth port, accountID: " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
 				return Auth::Enums::Login::INCORRECT;
 				return Auth::Enums::Login::INCORRECT;
 			}
