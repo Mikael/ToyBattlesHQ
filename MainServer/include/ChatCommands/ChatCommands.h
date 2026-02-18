@@ -36,12 +36,6 @@ namespace Main
 				MC::RoomsManager& roomsManager, MP::MainScheduler& scheduler, std::uint32_t roomNumber, Main::MainServer&);
 
 			static void showUsages(std::shared_ptr<Main::Network::Session>, Common::Network::Packet& response, Common::Enums::PlayerGrade playerGrade);
-
-			static bool isIpInSubnet(const asio::ip::network_v4& network, const asio::ip::address_v4& ip)
-			{
-				asio::ip::network_v4 test_network(ip, network.prefix_length());
-				return network.canonical().address() == test_network.canonical().address();
-			}
 		};
 
 #define REGISTER_CMD(ClassName, Grade)                                     \

@@ -38,7 +38,6 @@ namespace Auth
 
 		bool tryLockAccount(std::uint32_t accountId, bool isGraded);
 		std::uint32_t generateAccountKey() const;
-		bool isIpInSubnet(const asio::ip::network_v4& network, const asio::ip::address_v4& ip) const;
 		std::string generateRandomSalt(std::size_t length = 16) const;
 
 		bool verifyToken(const std::string& encryptedSecret, const std::optional<std::string>& token);

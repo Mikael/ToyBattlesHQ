@@ -286,12 +286,6 @@ namespace Auth
 		return hex; 
 	}
 
-	bool AuthService::isIpInSubnet(const asio::ip::network_v4& network, const asio::ip::address_v4& ip) const
-	{
-		asio::ip::network_v4 test_network(ip, network.prefix_length());
-		return network.canonical().address() == test_network.canonical().address();
-	}
-
 	bool AuthService::tryLockAccount(std::uint32_t accountId, bool isGraded) 
 	{
 		constexpr int MAX_RETRIES = 3;
