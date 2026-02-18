@@ -8,6 +8,7 @@
 #include "../../Classes/RoomsManager.h"
 #include "../../Structures/EndScoreboard.h"
 #include "RoomStartHandler.h"
+#include "Detail/IpcUtils.h"
 #include "../../Classes/ClansManager.h"
 
 namespace Main

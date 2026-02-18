@@ -8,6 +8,7 @@
 #include "../../Classes/ClanRoom.h"
 #include "../../Classes/ClansManager.h"
 #include <cstring> 
+#include "Detail/IpcUtils.h"
 
 namespace Main
 {
