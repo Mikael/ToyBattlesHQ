@@ -3,7 +3,7 @@
 ## 3.1.1 Requirements
 - Python >= 3.10
 - CMake >= 3.26
-- GCC >= 13 or MSVC >= 14.10 (Clang: untested)
+- GCC >= 14 or MSVC >= 14.10 (Clang: untested)
 - C++23 standard or newer
 
 ## 3.1.2 Installation
