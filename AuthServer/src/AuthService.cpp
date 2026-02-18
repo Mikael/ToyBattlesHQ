@@ -40,6 +40,7 @@ namespace Auth
 
 			if (!isIpInSubnet(vpnNet, clientIp))
 			{
+				std::cout << "User PlainIp: " << plainIp << '\n';
 				m_emailDispatcher.sendAlertAsync("[MEDIUM Alert] TB - Graded Login Wrong VPN IP",
 					"High Level Alert: Graded Account(ID: " + std::to_string(ainfo.ainfoClient.accountId) + ") accessed with the wrong VPN IP, access was blocked",
 
