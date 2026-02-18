@@ -6,10 +6,10 @@
 
 namespace Auth
 {
-	AuthServer::AuthServer(ioContext& io_context, const std::string& ip, const std::string& vpnIp, std::uint16_t port, std::uint16_t gradedPort)
+	AuthServer::AuthServer(ioContext& io_context, const std::string& ip, std::uint16_t port, std::uint16_t gradedPort)
 		: m_io_context(io_context)
 		, m_acceptor(io_context, tcp::endpoint(asio::ip::address::from_string(ip), port))
-		, m_gradedAcceptor(io_context, tcp::endpoint(asio::ip::address::from_string(vpnIp), gradedPort))
+		, m_gradedAcceptor(io_context, tcp::endpoint(asio::ip::address::from_string(ip), gradedPort))
 		, m_database()
 		, m_authService{ m_database, m_emailDispatcher }
 	{

@@ -27,7 +27,7 @@ namespace Auth
 		Common::Utils::EmailDispatcher m_emailDispatcher;
 
 	public:
-		AuthServer(ioContext& io_context, const std::string& ip, const std::string& vpnIp, std::uint16_t port, std::uint16_t gradedPort);
+		AuthServer(ioContext& io_context, const std::string& ip, std::uint16_t port, std::uint16_t gradedPort);
 		void asyncAccept();	
 		void asyncAcceptUngraded();
 		void asyncAcceptGraded();

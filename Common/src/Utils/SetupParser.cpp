@@ -145,12 +145,7 @@ namespace Common
                 return false;
             }
 
-            if (!authServer.contains("GradedPort") || authServer["GradedPort"].as<std::uint32_t>() == 0)
-            {
-                ::Utils::Logger::log("Missing or invalid GradedPort in 'AuthServer' section", ::Utils::LogType::Error, "SetupParser::checkAuthSection");
-                return false;
-            }
-
+           
             if (!authServer.contains("EnhancedSecurity"))
             {
                 ::Utils::Logger::log("Missing EnhancedSecurity parameter in 'AuthServer' section", ::Utils::LogType::Error, "SetupParser::checkAuthSection");
@@ -159,9 +154,9 @@ namespace Common
 
             if (authServer["EnhancedSecurity"].as<bool>())
             {
-                if (!authServer.contains("VpnIp") || authServer["VpnIp"].as<std::string>().empty())
+                if (!authServer.contains("GradedPort") || authServer["GradedPort"].as<std::uint32_t>() == 0)
                 {
-                    ::Utils::Logger::log("Missing or empty VpnIp in 'AuthServer' section while EnhancedSecurity is true", ::Utils::LogType::Error, "SetupParser::checkAuthSection");
+                    ::Utils::Logger::log("Missing or invalid GradedPort in 'AuthServer' section", ::Utils::LogType::Error, "SetupParser::checkAuthSection");
                     return false;
                 }
             }
@@ -423,9 +418,6 @@ namespace Common
             auth.port = m_iniFile["AuthServer"]["Port"].as<std::uint32_t>();
             auth.gradedPort = m_iniFile["AuthServer"]["GradedPort"].as<std::uint32_t>();
             auth.enhancedSecurity = m_iniFile["AuthServer"]["EnhancedSecurity"].as<bool>();
-
-            if (auth.enhancedSecurity)
-                auth.vpnIp = m_iniFile["AuthServer"]["VpnIp"].as<std::string>();
 
             return auth;
         }
