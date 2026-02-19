@@ -108,10 +108,12 @@ namespace Main
 				mailbox.accountId = m_player.getAccountInfo().accountID;
 				std::memcpy(mailbox.nickname, m_player.getAccountInfo().nickname, Common::Constants::maxNicknameSize);
 				addMailboxSent(mailbox);
+				return true;
 			}
 			else if (res == Main::Enums::MailboxExtra::MAILBOX_DB_ERROR)
 			{
 				sendMessage("[Session::sendOfflineMailbox] error: database error");
+				return false;
 			}
 			else 
 			{
@@ -119,6 +121,7 @@ namespace Main
 				asyncWrite(m_packet);
 				return false;
 			}
+			return true;
 		}
 
 		bool Session::sendOnlineMailbox(std::shared_ptr<Session> target, Main::Structures::Mailbox mailbox)
@@ -2066,6 +2069,7 @@ PACK_POP()
 				if (!deleteItem(current.itemSerialInfo, action)) 
 					return false;
 			}
+			return true;
 		}
 
 		void Session::addItems(const std::vector<Main::Structures::TradeBasicItem>& tradedItems)
