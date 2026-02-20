@@ -359,7 +359,8 @@ namespace Common
 
 			CURLcode res = curl_easy_perform(curl);
 
-			if (res != CURLE_OK) {
+			if (res != CURLE_OK) 
+			{
 				::Utils::Logger::log("[sendEmails] curl_easy_perform() failed: " + std::string(curl_easy_strerror(res)), ::Utils::LogType::Error, "sendEmail");
 			}
 
@@ -369,22 +370,26 @@ namespace Common
 			return res == CURLE_OK;
 		}
 
-		// Example by using an API from MailBaby
-		inline bool sendEmailsBaby(const std::vector<std::string>& recipients, const std::string& subject, const std::string& body)
+
+		// Example via API usage (Babymail)
+		inline size_t writeCallback(void* contents, size_t size, size_t nmemb, void* userp) 
 		{
-			if (recipients.empty())
-			{
-				::Utils::Logger::log("[sendEmails] recipients list empty", ::Utils::LogType::Warning, "sendEmails");
+			((std::string*)userp)->append((char*)contents, size * nmemb);
+			return size * nmemb;
+		}
+
+		inline bool sendEmails(const std::vector<std::string>& recipients, const std::string& subject, const std::string& body)
+		{
+			const auto& generalSetup = Common::Utils::SetupParser::getInstance().getGeneralSetup();
+
+			if (recipients.empty()) {
+				std::cerr << "[sendEmails] recipients list empty" << std::endl;
 				return false;
 			}
 
-			const auto& generalSetup = Common::Utils::SetupParser::getInstance().getGeneralSetup();
-			bool allSucceeded = true;
-
 			CURL* curl = curl_easy_init();
-			if (!curl)
-			{
-				::Utils::Logger::log("[sendEmails] Failed to initialize CURL", ::Utils::LogType::Error, "sendEmails");
+			if (!curl) {
+				std::cerr << "[sendEmails] Failed to initialize CURL" << std::endl;
 				return false;
 			}
 
@@ -397,6 +402,8 @@ namespace Common
 			curl_easy_setopt(curl, CURLOPT_POST, 1L);
 			curl_easy_setopt(curl, CURLOPT_TIMEOUT, 20L);
 
+			bool allSucceeded = true;
+
 			for (const auto& recipient : recipients)
 			{
 				std::ostringstream postFields;
@@ -407,11 +414,23 @@ namespace Common
 
 				curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postFields.str().c_str());
 
+				std::string responseString;
+				curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
+				curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseString);
+
 				CURLcode res = curl_easy_perform(curl);
 				if (res != CURLE_OK)
 				{
-					::Utils::Logger::log("[sendEmails] Failed sending to " + recipient + ": " + std::string(curl_easy_strerror(res)),
-						::Utils::LogType::Error, "sendEmails");
+					std::cerr << "[sendEmails] CURL error sending to " << recipient
+						<< ": " << curl_easy_strerror(res) << std::endl;
+					allSucceeded = false;
+					continue;
+				}
+
+				if (responseString.find("\"status\":\"success\"") == std::string::npos) 
+				{
+					std::cerr << "[sendEmails] MailBaby error for " << recipient
+						<< ": " << responseString << std::endl;
 					allSucceeded = false;
 				}
 			}
