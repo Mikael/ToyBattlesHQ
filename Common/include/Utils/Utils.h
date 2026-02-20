@@ -378,7 +378,7 @@ namespace Common
 			return size * nmemb;
 		}
 
-		inline bool sendEmails(const std::vector<std::string>& recipients, const std::string& subject, const std::string& body)
+		inline bool sendEmailsBaby(const std::vector<std::string>& recipients, const std::string& subject, const std::string& body)
 		{
 			const auto& generalSetup = Common::Utils::SetupParser::getInstance().getGeneralSetup();
 
