@@ -369,6 +369,59 @@ namespace Common
 			return res == CURLE_OK;
 		}
 
+		// Example by using an API from MailBaby
+		inline bool sendEmailsBaby(const std::vector<std::string>& recipients, const std::string& subject, const std::string& body)
+		{
+			if (recipients.empty())
+			{
+				::Utils::Logger::log("[sendEmails] recipients list empty", ::Utils::LogType::Warning, "sendEmails");
+				return false;
+			}
+
+			const auto& generalSetup = Common::Utils::SetupParser::getInstance().getGeneralSetup();
+			bool allSucceeded = true;
+
+			CURL* curl = curl_easy_init();
+			if (!curl)
+			{
+				::Utils::Logger::log("[sendEmails] Failed to initialize CURL", ::Utils::LogType::Error, "sendEmails");
+				return false;
+			}
+
+			struct curl_slist* headers = nullptr;
+			headers = curl_slist_append(headers, ("X-API-KEY: " + generalSetup.emailToken).c_str());
+			headers = curl_slist_append(headers, "Content-Type: application/x-www-form-urlencoded");
+
+			curl_easy_setopt(curl, CURLOPT_URL, "https://api.mailbaby.net/mail/send");
+			curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+			curl_easy_setopt(curl, CURLOPT_POST, 1L);
+			curl_easy_setopt(curl, CURLOPT_TIMEOUT, 20L);
+
+			for (const auto& recipient : recipients)
+			{
+				std::ostringstream postFields;
+				postFields << "from=" << curl_easy_escape(curl, generalSetup.email.c_str(), 0)
+					<< "&to=" << curl_easy_escape(curl, recipient.c_str(), 0)
+					<< "&subject=" << curl_easy_escape(curl, subject.c_str(), 0)
+					<< "&body=" << curl_easy_escape(curl, body.c_str(), 0);
+
+				curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postFields.str().c_str());
+
+				CURLcode res = curl_easy_perform(curl);
+				if (res != CURLE_OK)
+				{
+					::Utils::Logger::log("[sendEmails] Failed sending to " + recipient + ": " + std::string(curl_easy_strerror(res)),
+						::Utils::LogType::Error, "sendEmails");
+					allSucceeded = false;
+				}
+			}
+
+			curl_slist_free_all(headers);
+			curl_easy_cleanup(curl);
+
+			return allSucceeded;
+		}
+
 		inline bool sendEmail(const std::string& to, const std::string& subject, const std::string& body)
 		{
 			return sendEmails(std::vector<std::string>{to}, subject, body);
