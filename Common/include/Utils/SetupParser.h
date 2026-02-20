@@ -79,6 +79,7 @@ namespace Common
             CryptoPP::SecByteBlock  twoFaSecret;
             std::string smtpServer;
             std::string email;
+            std::string emailUsername;
             std::string emailToken;
             std::vector<std::string> securityNotificationEmails;  
         };

@@ -346,7 +346,7 @@ namespace Common
 				"Content-Type: text/html; charset=UTF-8\r\n"
 				"\r\n" + body + "\r\n";
 
-			curl_easy_setopt(curl, CURLOPT_USERNAME, generalSetup.email.c_str());
+			curl_easy_setopt(curl, CURLOPT_USERNAME, generalSetup.emailUsername.c_str());
 			curl_easy_setopt(curl, CURLOPT_PASSWORD, generalSetup.emailToken.c_str());
 			curl_easy_setopt(curl, CURLOPT_URL, generalSetup.smtpServer.c_str());
 			curl_easy_setopt(curl, CURLOPT_MAIL_FROM, generalSetup.email.c_str());

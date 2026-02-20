@@ -284,6 +284,7 @@ namespace Common
             }
 
             generalSetup.emailToken = emailTokenVal;
+            generalSetup.emailUsername = section["EmailUsername"].as<std::string>();
             generalSetup.smtpServer = section["SmtpServer"].as<std::string>();
             generalSetup.email = section["EmailSender"].as<std::string>();
 
@@ -368,6 +369,13 @@ namespace Common
             if (!twoFaSecretVal)
             {
                 ::Utils::Logger::log("Environment variable not set: " + twoFaSecretEnv,::Utils::LogType::Error,"SetupParser::checkGeneralConfig");
+                return false;
+            }
+
+            std::string emailUsername = general["EmailUsername"].as<std::string>();
+            if (emailUsername.empty())
+            {
+                ::Utils::Logger::log("EmailUsername missing or empty in [General]", ::Utils::LogType::Error, "SetupParser::checkGeneralConfig");
                 return false;
             }
 
