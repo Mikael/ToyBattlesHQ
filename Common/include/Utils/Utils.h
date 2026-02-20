@@ -406,11 +406,23 @@ namespace Common
 
 			for (const auto& recipient : recipients)
 			{
+				char* escapedFrom = curl_easy_escape(curl, generalSetup.email.c_str(), 0);
+				char* escapedTo = curl_easy_escape(curl, recipient.c_str(), 0);
+				char* escapedSubject = curl_easy_escape(curl, subject.c_str(), 0);
+				char* escapedBody = curl_easy_escape(curl, body.c_str(), 0);
+
+				std::cout << "From: " << escapedFrom << '\n';
+
 				std::ostringstream postFields;
-				postFields << "from=" << curl_easy_escape(curl, generalSetup.email.c_str(), 0)
-					<< "&to=" << curl_easy_escape(curl, recipient.c_str(), 0)
-					<< "&subject=" << curl_easy_escape(curl, subject.c_str(), 0)
-					<< "&body=" << curl_easy_escape(curl, body.c_str(), 0);
+				postFields << "from=" << escapedFrom
+					<< "&to=" << escapedTo
+					<< "&subject=" << escapedSubject
+					<< "&body=" << escapedBody;
+
+				curl_free(escapedFrom);
+				curl_free(escapedTo);
+				curl_free(escapedSubject);
+				curl_free(escapedBody);
 
 				curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postFields.str().c_str());
 
@@ -427,7 +439,7 @@ namespace Common
 					continue;
 				}
 
-				if (responseString.find("\"status\":\"success\"") == std::string::npos) 
+				if (responseString.find("\"status\":\"success\"") == std::string::npos)
 				{
 					std::cerr << "[sendEmails] MailBaby error for " << recipient
 						<< ": " << responseString << std::endl;
