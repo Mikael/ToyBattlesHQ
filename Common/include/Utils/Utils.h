@@ -406,20 +406,18 @@ namespace Common
 
 			for (const auto& recipient : recipients)
 			{
-				char* escapedFrom = curl_easy_escape(curl, generalSetup.email.c_str(), 0);
+				std::string from = generalSetup.email;
+
 				char* escapedTo = curl_easy_escape(curl, recipient.c_str(), 0);
 				char* escapedSubject = curl_easy_escape(curl, subject.c_str(), 0);
 				char* escapedBody = curl_easy_escape(curl, body.c_str(), 0);
 
-				std::cout << "From: " << escapedFrom << '\n';
-
 				std::ostringstream postFields;
-				postFields << "from=" << escapedFrom
+				postFields << "from=" << from
 					<< "&to=" << escapedTo
 					<< "&subject=" << escapedSubject
 					<< "&body=" << escapedBody;
 
-				curl_free(escapedFrom);
 				curl_free(escapedTo);
 				curl_free(escapedSubject);
 				curl_free(escapedBody);
