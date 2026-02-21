@@ -51,6 +51,7 @@ namespace Common
 			std::size_t m_id = 0;
 			std::uint32_t m_aid = 0;
 			std::string m_ip;
+			std::string m_gradedIp{ "" };
 			std::uint_least16_t m_port;
 
 		public:
@@ -185,6 +186,8 @@ namespace Common
 			}
 
 			const std::string& getIp() const noexcept { return m_ip; }
+			void setGradedIp(const std::string& ip) { m_gradedIp = ip; }
+			void setIpFromGraded() { m_ip = m_gradedIp; }
 			const std::uint_least16_t getPort() const noexcept { return m_port; }
 		};
 

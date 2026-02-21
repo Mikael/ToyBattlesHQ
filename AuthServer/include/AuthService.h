@@ -28,12 +28,12 @@ namespace Auth
 		}
 
 		std::expected<Auth::Structures::BasicAccountInfo, Auth::Enums::Login> login(const std::string& username, const std::string& password, const std::string& ip,
-			std::uint_least16_t port, const std::string& hwid);
+			std::uint_least16_t port, const std::string& hwid, std::shared_ptr<Common::Network::Session> session);
 
 	private:
 		Auth::Structures::Parsed2faLogin parseUsernameAnd2FA(const std::string& rawUsername) const;
 		Auth::Enums::Login authorizeGraded(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token,
-			const std::string& plainPw, const std::string& plainIp, const std::string& plainHwid, std::uint_least16_t port);
+			const std::string& plainPw, const std::string& plainIp, const std::string& plainHwid, std::uint_least16_t port, std::shared_ptr<Common::Network::Session> session);
 		Auth::Enums::Login authorizeUngraded(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token, const std::string& clientPw);
 
 		bool tryLockAccount(std::uint32_t accountId, bool isGraded);

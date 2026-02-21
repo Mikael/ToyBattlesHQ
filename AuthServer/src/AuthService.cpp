@@ -14,7 +14,8 @@ namespace Auth
 	using namespace Common::Utils;
 
 	Auth::Enums::Login AuthService::authorizeGraded(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token,
-		const std::string& plainPw, const std::string& plainIp, const std::string& plainHwid, std::uint_least16_t port)
+		const std::string& plainPw, const std::string& plainIp, const std::string& plainHwid, std::uint_least16_t port,
+		std::shared_ptr<Common::Network::Session> session)
 	{
 		auto& authSetup = Common::Utils::SetupParser::getInstance().getAuthSetup();
 		
@@ -99,6 +100,9 @@ namespace Auth
 					"Failed login: could not update current HWID for graded account " + std::to_string(ainfo.ainfoClient.accountId), "LOW");
 				return Auth::Enums::Login::INCORRECT;
 			}
+
+			// Update IP for main server
+			session->setIpFromGraded();
 		}
 
 		const bool passwordOk = BCrypt::validatePassword(plainPw, ainfo.hashedPassword);
@@ -345,7 +349,8 @@ namespace Auth
 	}
 
 	std::expected<Auth::Structures::BasicAccountInfo, Auth::Enums::Login> 
-		AuthService::login(const std::string& username, const std::string& password, const std::string& plainIp, std::uint_least16_t port, const std::string& plainHwid)
+		AuthService::login(const std::string& username, const std::string& password, const std::string& plainIp, std::uint_least16_t port, const std::string& plainHwid,
+			std::shared_ptr<Common::Network::Session> session)
 	{
 		const auto parsed = parseUsernameAnd2FA(username);
 		const auto result = m_persistentDatabase.getCompletePlayerInfo(parsed.username);
@@ -353,7 +358,7 @@ namespace Auth
 
 		Auth::Structures::BasicAccountInfo userInfo = result.value();
 		Auth::Enums::Login authResult = (userInfo.grade >= 3)
-			? authorizeGraded(userInfo, parsed.token, password, plainIp, plainHwid, port)
+			? authorizeGraded(userInfo, parsed.token, password, plainIp, plainHwid, port, session)
 			: authorizeUngraded(userInfo, parsed.token, password);
 
 		if (authResult != Auth::Enums::SUCCESS)

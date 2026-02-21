@@ -68,7 +68,7 @@ namespace Common
 			}
 			if (m_checkValidSession && !m_isValidSession)
 			{
-				//::Utils::Logger::log("Invalid session with IP: " + m_ip, ::Utils::LogType::Warning, "Session::onRead");
+				::Utils::Logger::log("Invalid session with IP: " + m_ip, ::Utils::LogType::Warning, "Session::onRead");
 				closeSocket();
 				return;
 			}
