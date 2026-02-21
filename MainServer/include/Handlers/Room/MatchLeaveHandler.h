@@ -95,6 +95,8 @@ namespace Main
                         room->setStateFor(uniqueId, Common::Enums::STATE_WAITING);
                     }
                 }
+
+                session->flushPendingFriendRequests();
             }
 		}
 	}
