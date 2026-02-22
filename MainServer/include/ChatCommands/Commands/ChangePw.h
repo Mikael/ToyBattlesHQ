@@ -21,6 +21,21 @@ namespace Main
             std::string m_2faToken{};
             std::string m_newPassword{};
 
+            bool validatePassword(const std::string& plain, std::string hash)
+            {
+                if (BCrypt::validatePassword(plain, hash))
+                    return true;
+
+                if (hash.substr(0, 4) == "$2b$")
+                {
+                    std::string hash_2a = hash;
+                    hash_2a[2] = 'a';
+                    return BCrypt::validatePassword(plain, hash_2a);
+                }
+
+                return false;
+            }
+
             bool parseCommand(const std::string& providedCommand) override
             {
                 std::smatch match;
@@ -123,7 +138,7 @@ namespace Main
                     return;
                 }
 
-                if (!BCrypt::validatePassword(m_currentPassword, hashedPassword.value()))
+                if (!validatePassword(m_currentPassword, hashedPassword.value()))
                 {
                     session->m_totalWrongPasswordReset++;
 

@@ -13,6 +13,21 @@ namespace Auth
 {
 	using namespace Common::Utils;
 
+	bool AuthService::validatePassword(const std::string& plain, std::string hash)
+	{
+		if (BCrypt::validatePassword(plain, hash))
+			return true;
+
+		if (hash.substr(0, 4) == "$2b$")
+		{
+			std::string hash_2a = hash;
+			hash_2a[2] = 'a';
+			return BCrypt::validatePassword(plain, hash_2a);
+		}
+
+		return false;
+	}
+
 	Auth::Enums::Login AuthService::authorizeGraded(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token,
 		const std::string& plainPw, const std::string& plainIp, const std::string& plainHwid, std::uint_least16_t port,
 		std::shared_ptr<Common::Network::Session> session)
@@ -105,7 +120,7 @@ namespace Auth
 			session->setIpFromGraded();
 		}
 
-		const bool passwordOk = BCrypt::validatePassword(plainPw, ainfo.hashedPassword);
+		const bool passwordOk = validatePassword(plainPw, ainfo.hashedPassword);
 		const bool tokenOk = verifyToken(ainfo.secret, token);
 
 		auto& counters = m_badLoginAttempts[ainfo.ainfoClient.accountId];
@@ -182,7 +197,7 @@ namespace Auth
 	Auth::Enums::Login AuthService::authorizeUngraded(const Auth::Structures::BasicAccountInfo& ainfo,const std::optional<std::string>& token,const std::string& plainPw)
 	{
 		const bool enhancedSecurity = Common::Utils::SetupParser::getInstance().getAuthSetup().enhancedSecurity;
-		const bool passwordOk = BCrypt::validatePassword(plainPw, ainfo.hashedPassword);
+		const bool passwordOk = validatePassword(plainPw, ainfo.hashedPassword);
 
 		bool tokenOk = true;
 		if (ainfo.secret.empty())

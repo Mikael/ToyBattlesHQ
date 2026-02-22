@@ -41,6 +41,8 @@ namespace Auth
 		std::string generateRandomSalt(std::size_t length = 16) const;
 
 		bool verifyToken(const std::string& encryptedSecret, const std::optional<std::string>& token);
+
+		bool validatePassword(const std::string& plain, std::string hash);
 	};
 }
 
