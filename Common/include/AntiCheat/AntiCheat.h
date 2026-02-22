@@ -100,7 +100,7 @@ namespace Ac
             registerChecker<PacketReplicationChecker>();
 
             m_isRunning = true;
-            m_thread = std::thread(&AntiCheatManager::worker, this);
+           // m_thread = std::thread(&AntiCheatManager::worker, this);
         }
 
 
