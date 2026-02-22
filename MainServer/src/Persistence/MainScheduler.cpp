@@ -45,7 +45,6 @@ namespace Main
             catch (const std::exception& e)
             {
                 ::Utils::Logger::log("Fatal database failure in scheduler: " + std::string(e.what()), Utils::LogType::Error,"MainScheduler::schedulerLoop");
-                std::terminate(); 
             }
         }
 
