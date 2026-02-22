@@ -64,6 +64,7 @@ namespace Main
                         if (++attempt >= maxRetries)
                         {
                             ::Utils::Logger::log("Max retries (" + std::to_string(maxRetries) + ") exceeded: " + std::string(e.what()), Utils::LogType::Error, "MainScheduler::withRetry");
+                            break;
                         }
 
                         if (isConnectionError(e))
