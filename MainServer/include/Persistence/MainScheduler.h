@@ -48,57 +48,6 @@ namespace Main
             std::size_t m_incrementalDifferentiationKey = 0;
             std::mutex m_callbacksMutex;
 
-            template <typename Func>
-            decltype(auto) withRetry(Func&& f, int maxRetries = 5)
-            {
-                int attempt = 0;
-                while (true)
-                {
-                    try
-                    {
-                        m_database.ensureConnections();
-                        return std::forward<Func>(f)();
-                    }
-                    catch (const sql::SQLException& e)
-                    {
-                        if (++attempt >= maxRetries)
-                        {
-                            ::Utils::Logger::log("Max retries (" + std::to_string(maxRetries) + ") exceeded: " + std::string(e.what()), Utils::LogType::Error, "MainScheduler::withRetry");
-                            break;
-                        }
-
-                        if (isConnectionError(e))
-                        {
-                            ::Utils::Logger::log("Connection error detected, will reconnect. Attempt " + std::to_string(attempt) + "/" + std::to_string(maxRetries),
-                                Utils::LogType::Warning, "MainScheduler::withRetry");
-
-                            std::this_thread::sleep_for(std::chrono::milliseconds(500 * attempt));
-                        }
-                        else
-                        {
-                            ::Utils::Logger::log("Non-connection SQL error: " + std::string(e.what()), Utils::LogType::Error, "MainScheduler::withRetry");
-                        }
-                    }
-                }
-            }
-
-            bool isConnectionError(sql::SQLException e)
-            {
-                switch (e.getErrorCode()) {
-                case 2002: // Can't connect to server
-                case 2003: // Can't connect to MySQL server
-                case 2005: // Unknown MySQL server host
-                case 2006: // MySQL server has gone away
-                case 2013: // Lost connection to MySQL server
-                case 2055: // Lost connection to MySQL server
-                    return true;
-                default:
-                    return false;
-                }
-            }
-
-            void schedulerLoop();
-            void persist();
 
         public:
             explicit MainScheduler(std::size_t wakeupFrequency, Main::Persistence::PersistentDatabase& database);
@@ -109,13 +58,7 @@ namespace Main
             void addCallback(const std::source_location& loc, std::uint32_t accountId, std::size_t differentiationKey, Function databaseMemberFunction, Args&&... args)
             {
                 std::unique_lock<std::mutex> lock(m_callbacksMutex);
-                m_databaseCallbacks[accountId][differentiationKey] =
-                    [this, databaseMemberFunction, ...args = std::forward<Args>(args)]() mutable
-                    {
-                        return withRetry([&]() {
-                            return std::invoke(databaseMemberFunction, m_database, std::forward<decltype(args)>(args)...);
-                            });
-                    };
+                m_databaseCallbacks[accountId][differentiationKey] = std::bind(databaseMemberFunction, &m_database, std::forward<Args>(args)...);
             }
 
             template <typename Function, typename... Args>
@@ -123,11 +66,8 @@ namespace Main
             {
                 std::unique_lock<std::mutex> lock(m_callbacksMutex);
                 m_databaseCallbacksIncremental[accountId][++m_incrementalDifferentiationKey] =
-                    [this, databaseMemberFunction, ...args = std::forward<Args>(args)]() mutable
-                    {
-                        withRetry([&]() {
-                            std::invoke(databaseMemberFunction, m_database, std::forward<decltype(args)>(args)...);
-                            });
+                    [this, databaseMemberFunction, &loc, ...args = std::forward<Args>(args)]() mutable {
+                    std::invoke(databaseMemberFunction, m_database, std::forward<decltype(args)>(args)...);
                     };
             }
 
@@ -135,11 +75,15 @@ namespace Main
             template<typename F, typename... Args>
             decltype(auto) immediatePersist(const std::source_location& loc, F databaseMemberFunction, Args&&... args)
             {
-                return withRetry([&]() -> decltype(auto) {
-                    return std::invoke(databaseMemberFunction, m_database, std::forward<Args>(args)...);
-                    });
+                return std::invoke(databaseMemberFunction, m_database, std::forward<Args>(args)...);
             }
 
+
+        private:
+            void schedulerLoop();
+            void persist();
+
+        public:
             void persistFor(std::uint32_t accountId);
         };
     }

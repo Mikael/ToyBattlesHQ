@@ -175,7 +175,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updatePlayerCurrencyByType");
-                throw;
+                return;
             }
         }
 
@@ -194,7 +194,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::addPlayerAchievement");
-                throw;
+                return;
             }
         }
 
@@ -219,7 +219,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::getColumnByAid");
-                throw;
+                return std::nullopt;
             }
         }
 
@@ -239,8 +239,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::updatePasswordByAid");
-
-                throw;
+                return false;;
             }
         }
 
@@ -260,8 +259,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateSecretByAid");
-
-                throw;
+                return false;
             }
         }
 
@@ -280,7 +278,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::logMessage");
-                throw;
+                return;
             }
         }
 
@@ -1091,7 +1089,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getPlayerAchievements");
-                throw;
+                return achievements;
             }
 
             return achievements;
@@ -1146,7 +1144,6 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getPlayerMissions");
-                throw;
             }
 
             return missions;
@@ -1191,7 +1188,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::getEventInfo (" + tableName + ")");
-                throw;
+                return std::nullopt;
             }
         }
 
@@ -1238,7 +1235,7 @@ namespace Main
             }
             catch (const sql::SQLException& e)
             {
-                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getCapsuleEvent"); throw;
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getCapsuleEvent"); 
             }
 
             return std::nullopt;
@@ -1292,7 +1289,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::updateCapsuleEvent");
-                throw;
+                return false;
             }
         }
 
@@ -1324,7 +1321,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::insertItemLogs");
-                throw;
+                return false;
             }
         }
 
@@ -1347,7 +1344,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::insertItemLog");
-                throw;
+                return false;
             }
 
             return false;
@@ -1433,7 +1430,6 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::updateEventInfo (" + tableName + ")");
-                throw;
             }
 
             return false;
@@ -1484,7 +1480,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::getExpMpBonusInfo");
-                throw;
+                return std::nullopt;
             }
         }
 
@@ -1538,7 +1534,6 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::updateExpMpBonusInfo");
-                throw;
             }
 
             return false;
@@ -1595,7 +1590,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error, "PersistentDatabase::updatePlayerMissionProgress");
-                throw;
+                return false;
             }
         }
 
@@ -1683,7 +1678,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::savePlayerMissions");
-                throw;
+                return false;
             }
         }
 
@@ -1700,7 +1695,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateLatestSelectedCharacter");
-                throw;
+                return;
             }
         }
 
@@ -1720,7 +1715,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), ::Utils::LogType::Error, "PersistentDatabase::logGameEvent");
-                throw;
+                return false;
             }
         }
 
@@ -1805,7 +1800,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getPlayerInfo");
-                throw;
+                return std::nullopt;
             }
 
             return playerInfoStructure;
@@ -1834,7 +1829,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::getLastLoggedByAccountId");
-                throw;
+                return std::nullopt;
             }
         }
 
@@ -1852,7 +1847,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::resetAccountKey");
-                throw;
+                return false;
             }
         }
 
@@ -1888,7 +1883,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getPlayerInfoByNickname");
-                throw;
+                return std::nullopt;;
             }
         }
 
@@ -1921,7 +1916,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::isMuted");
-                throw;
+                return Main::Structures::MuteInfo{ false, "", "", ""};
             }
         }
 
@@ -1953,7 +1948,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::getMuteInfoByNickname");
-                throw;
+                return std::nullopt;;
             }
         }
 
@@ -1984,7 +1979,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getBanInfoByNickname");
-                throw;
+                return std::nullopt;;
             }
         }
 
@@ -2014,7 +2009,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getRoomCreationDisabledUntil");
-                throw;
+                return std::nullopt;;
             }
         }
 
@@ -2045,7 +2040,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::isRoomCreationDisabled");
-                throw;
+                return false;
             }
         }
        
@@ -2078,7 +2073,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getVotekickDisabledUntil");
-                throw;
+                return std::nullopt;;
             }
         }
 
@@ -2107,7 +2102,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::isVotekickDisabled");
-                throw;
+                return false;
             }
         }
 
@@ -2129,7 +2124,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::unbanPlayer");
-                throw;
+                return false;
             }
         }
 
@@ -2156,7 +2151,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::addPlayer");
-                throw;
+                return false;
             }
         }
 
@@ -2177,7 +2172,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::playerExistsByNickname");
-                throw;
+                return false;
             }
         }
 
@@ -2198,7 +2193,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::playerExistsByUsername");
-                throw;
+                return false;
             }
         }
 
@@ -2317,7 +2312,6 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getPlayerItems");
-                throw;
             }
 
             return std::pair{ std::move(nonEquippedItems), std::move(equippedItemsPerCharacter) };
@@ -2348,7 +2342,7 @@ namespace Main
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()) + " | AccountID: " + std::to_string(accountID) +
                     ", ItemNumber: " + std::to_string(itemNumber) + ", NewItemID: " + std::to_string(newItemId), 
                     Utils::LogType::Error, "PersistentDatabase::replaceItem");  
-                throw;
+                return false;
             }
         }
 
@@ -2381,7 +2375,7 @@ namespace Main
                     ", ItemNumber: " + std::to_string(itemNumber) +
                     ", NewItemID: " + std::to_string(newItemId),
                     Utils::LogType::Error, "PersistentDatabase::replaceItemResetEnergy");
-                throw;
+                return false;
             }
         }
 
@@ -2424,7 +2418,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::addPlayerItems");
-                throw;
+                return false;
             }
         }
 
@@ -2443,7 +2437,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateItemStock");
-                throw;
+                return false;
             }
         }
 
@@ -2482,7 +2476,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::prolongItems");
-                throw;
+                return;
             }
         }
 
@@ -2511,7 +2505,7 @@ namespace Main
                     " | AccountID: " + std::to_string(accountId) +
                     ", ItemNumber: " + std::to_string(itemNumber),
                     Utils::LogType::Error, "PersistentDatabase::removePlayerItem");
-                throw;
+                return false;
             }
         }
 
@@ -2534,7 +2528,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log(std::string("MariaDB exception: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::updatePlayerLevel");
-                throw;
+                return;
             }
         }
 
@@ -2557,7 +2551,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log(std::string("MariaDB exception: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::updatePlayerExperience");
-                throw;
+                return;
             }
         }
 
@@ -2580,7 +2574,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log(std::string("MariaDB exception: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::updatePlayerName");
-                throw;
+                return false;
             }
             return true;
         }
@@ -2623,7 +2617,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log(std::string("MariaDB exception: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::updateSuspension");
-                throw;
+                return false;
             }
             return true;
         }
@@ -2647,7 +2641,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log(std::string("MariaDB exception: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::updateLatestRewardDay");
-                throw;
+                return;
             }
         }
 
@@ -2673,7 +2667,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log(std::string("MariaDB exception: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::getLatestRewardDayFor");
-                throw;
+                return "";
             }
         }
 
@@ -2711,7 +2705,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::mustRewardsBeUpdated");
-                throw;
+                return false;
             }
         }
 
@@ -2756,7 +2750,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateRewards");
-                throw;
+                return;
             }
         }
 
@@ -2779,7 +2773,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateBattery");
-                throw;
+                return;
             }
         }
 
@@ -2803,7 +2797,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateClanContribution");
-                throw;
+                return;
             }
         }
 
@@ -2830,7 +2824,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateClanStats");
-                throw;
+                return;
             }
         }
 
@@ -2867,7 +2861,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log(std::string("SQL Error: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::reduceDurability");
-                throw;
+                return;
             }
         }
 
@@ -2888,7 +2882,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log(std::string("SQL Error: ") + e.what(), Utils::LogType::Error, "PersistentDatabase::updateItemDurability");
-                throw;
+                return;
             }
         }
 
@@ -2946,7 +2940,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updatePlayerStats");
-                throw;
+                return;
             }
         }
 
@@ -2994,7 +2988,7 @@ namespace Main
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),
                     Utils::LogType::Error, "PersistentDatabase::updateMute");
-                throw;
+                return false;
             }
         }
 
@@ -3018,7 +3012,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateVotekickDisabledUntil");
-                throw;
+                return false;
             }
         }
 
@@ -3054,7 +3048,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::resetVotekickDisabledUntil");
-                throw;
+                return false;
             }
         }
 
@@ -3078,7 +3072,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateRoomCreationDisabledUntil");
-                throw;
+                return false;;
             }
         }
 
@@ -3114,7 +3108,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::resetRoomCreationDisabledUntil");
-                throw;
+                return false;;
             }
         }
 
@@ -3150,7 +3144,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::unmuteAccount");
-                throw;
+                return false;;
             }
         }
 
@@ -3175,7 +3169,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::switchItemEquip");
-                throw;
+                return;
             }
         }
 
@@ -3198,7 +3192,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::unequipItem");
-                throw;
+                return;
             }
         }
 
@@ -3222,7 +3216,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::equipItem");
-                throw;
+                return;
             }
         }
 
@@ -3258,7 +3252,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::swapItems");
-                throw;
+                return;
             }
         }
 
@@ -3290,7 +3284,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::addFriend");
-                throw;
+                return;
             }
         }
 
@@ -3316,7 +3310,7 @@ namespace Main
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),
                     Utils::LogType::Error, "PersistentDatabase::resetKillDeath");
-                throw;
+                return false;;
             }
         }
 
@@ -3340,7 +3334,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error, "PersistentDatabase::resetRecord");
-                throw;
+                return false;;
             }
         }
 
@@ -3384,7 +3378,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::batteryRecharge");
-                throw;
+                return false;;
             }
         }
 
@@ -3429,7 +3423,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::batteryExpansion");
-                throw;
+                return false;;
             }
         }
 
@@ -3475,7 +3469,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::inventoryExpansion");
-                throw;
+                return false;;
             }
         }
 
@@ -3501,7 +3495,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::removeFriend");
-                throw;
+                return;
             }
         }
 
@@ -3535,7 +3529,6 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::loadFriends");
-                throw;
             }
 
             return friendList;
@@ -3572,7 +3565,6 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::loadBlockedPlayers");
-                throw;
             }
 
             return blockedList;
@@ -3595,7 +3587,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::blockPlayer");
-                throw;
+                return;
             }
         }
 
@@ -3633,7 +3625,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::blockPlayerByNickname");
-                throw;
+                return std::nullopt;
             }
         }
 
@@ -3654,7 +3646,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::unblockPlayer");
-                throw;
+                return;
             }
         }
 
@@ -3717,7 +3709,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::addPendingFriendRequest");
-                throw;
+                return Main::Enums::AddFriendServerExtra::DB_ERROR;
             }
         }
 
@@ -3760,7 +3752,6 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),Utils::LogType::Error,"PersistentDatabase::loadPendingFriendRequests");
-                throw;
             }
 
             return pendingFriendRequests;
@@ -3769,12 +3760,13 @@ namespace Main
         // We're limited by uint32_t here since that's what the game expects ....
         std::vector<Main::Structures::SingleModeEvent> PersistentDatabase::getEventsModeList()
         {
+            std::vector<Main::Structures::SingleModeEvent> events;
+
             try
             {
                 std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement("SELECT * FROM EventsModes"));
                 std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
-                std::vector<Main::Structures::SingleModeEvent> events;
                 Main::Structures::SingleModeEvent singleEvent;
 
                 while (res->next())
@@ -3804,18 +3796,19 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getEventsModeList");
-                throw;
+                return events;
             }
         }
 
         std::vector<Main::Structures::SingleMapEvent> PersistentDatabase::getEventsMapList()
         {
+            std::vector<Main::Structures::SingleMapEvent> events;
+
             try
             {
                 std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement("SELECT * FROM EventsMaps"));
                 std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
 
-                std::vector<Main::Structures::SingleMapEvent> events;
                 Main::Structures::SingleMapEvent singleEvent;
 
                 while (res->next())
@@ -3845,7 +3838,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getEventsMapList");
-                throw;
+                return events;
             }
         }
 
@@ -3871,7 +3864,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::storeMailbox");
-                throw;
+                return;
             }
         }
 
@@ -3898,7 +3891,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::storeGiftbox");
-                throw;
+                return false;;
             }
         }
 
@@ -3961,7 +3954,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::storeGiftbox");
-                throw;
+                return false;;
             }
         }
        
@@ -4033,7 +4026,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::storeOfflineMailbox");
-                throw;
+                return Main::Enums::MailboxExtra::MAILBOX_DB_ERROR;;
             }
         }
 
@@ -4062,7 +4055,6 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::getNewMailboxes");
-                throw;
             }
 
             return mailboxes;
@@ -4085,7 +4077,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updateReadMailbox");
-                throw;
+                return;
             }
         }
 
@@ -4108,7 +4100,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::deleteMailbox");
-                throw;
+                return;
             }
         }
 
@@ -4130,7 +4122,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::deleteReceivedGiftbox");
-                throw;
+                return;
             }
         }
 
@@ -4181,7 +4173,6 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::loadMailboxes");
-                throw;
             }
 
             return { sentMailboxes, receivedMailboxes };
@@ -4226,7 +4217,6 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::loadReceivedGiftboxes");
-                throw;
             }
             return giftboxes;
         }
@@ -4262,7 +4252,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::insertEnergyToItem");
-                throw;
+                return;
             }
         }
 
@@ -4285,7 +4275,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("SQLException: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::updatePlayerLuckyPoints");
-                throw;
+                return;
             }
         }
 
@@ -4322,7 +4312,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::setCommandEventExpirationHours");
-                throw;
+                return false;
             }
         }
 
@@ -4340,7 +4330,6 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::isEventExpired");
-                throw;
             }
 
             return true; 
@@ -4367,7 +4356,7 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception in getGradedHwid: " + std::string(e.what()),::Utils::LogType::Error);
-                throw;
+                return std::nullopt;
             }
         }
 
