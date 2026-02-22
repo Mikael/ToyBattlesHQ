@@ -229,9 +229,15 @@ namespace Auth
 		}
 
 		constexpr std::uint32_t MAX_2FA_ATTEMPTS = 5;
-		
+		std::uint64_t suspendedUntilEpoch = Common::Utils::datetimeToEpoch(ainfo.suspendedUntil);
+		std::uint64_t currentEpoch = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+
 		if (counters.totalWrong2fas >= MAX_2FA_ATTEMPTS && enhancedSecurity)
 		{
+			if (suspendedUntilEpoch > currentEpoch)
+			{
+				return Auth::Enums::Login::INCORRECT;
+			}
 			if (auto decrypted = Common::Utils::decryptEmail(ainfo.encryptedEmail, Common::Utils::SetupParser::getInstance().getGeneralSetup().emailSecret))
 			{
 				m_emailDispatcher.sendEmailAsync({ decrypted.value() }, "[Security] Your ToyBattles account was banned",          
@@ -270,8 +276,6 @@ namespace Auth
 
 		m_badLoginAttempts.erase(ainfo.ainfoClient.accountId);
 
-		std::uint64_t currentEpoch = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-		std::uint64_t suspendedUntilEpoch = Common::Utils::datetimeToEpoch(ainfo.suspendedUntil);
 		if (suspendedUntilEpoch > currentEpoch)
 		{
 			m_persistentDatabase.logGameEvent("AuthUngradedLogin","Login attempt on suspended ungraded account " + std::to_string(ainfo.ainfoClient.accountId),"LOW");
