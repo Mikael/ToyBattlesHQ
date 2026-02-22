@@ -49,7 +49,7 @@ namespace Main
             std::mutex m_callbacksMutex;
 
             template <typename Func>
-            decltype(auto) withRetry(Func&& f, int maxRetries = 15)
+            decltype(auto) withRetry(Func&& f, int maxRetries = 5)
             {
                 int attempt = 0;
                 while (true)
@@ -64,7 +64,6 @@ namespace Main
                         if (++attempt >= maxRetries)
                         {
                             ::Utils::Logger::log("Max retries (" + std::to_string(maxRetries) + ") exceeded: " + std::string(e.what()), Utils::LogType::Error, "MainScheduler::withRetry");
-                            throw;
                         }
 
                         if (isConnectionError(e))
