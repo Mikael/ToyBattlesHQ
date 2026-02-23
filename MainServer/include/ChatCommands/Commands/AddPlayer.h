@@ -106,13 +106,8 @@ namespace Main
 					emailBody << "<p>To enable 2FA, open your authenticator app and manually enter the secret above (Time-based 2FA).</p>";
 					emailBody << "<p>You can change your password in-game with the command: /changepw "
 						"&lt;CurrentPassword&gt; &lt;2FaToken&gt; &lt;NewPassword&gt;</p>";
-					emailBody << "<p><b>Important:</b> When logging in, you must append your 2FA token to your username as follows:</p>";
-					emailBody << "<p><i>Username+2faToken</i><br>";
-					emailBody << "Example: if your username is <b>test</b> and your 2FA token is <b>111111</b>, use <b>test+111111</b> as the username.</p>";
 				}
 
-				emailBody << "<p>If you lose access to your account, you can request a password and 2FA reset by contacting us at "
-					<< "<a href=\"mailto:support@toybattles.net\">support@toybattles.net</a>.</p>";
 				emailBody << "<p>Keep this information secure and eventually delete this email once you have saved it.</p>";
 				emailBody << "</body></html>";
 
