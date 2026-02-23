@@ -351,7 +351,28 @@ namespace Main
 			Main::Structures::Friend friendStruct{ accountInfo.uniqueId, accountInfo.accountID };
 			std::memcpy(friendStruct.targetNickname, m_player.getPlayerName(), 16);
 			m_packet.setData(reinterpret_cast<std::uint8_t*>(&friendStruct), sizeof(friendStruct));
-			targetSession->asyncWrite(m_packet);
+			
+			if (targetSession->getPlayer().isInMatch())
+			{
+				targetSession->m_pendingFriendRequestsQueue.push_back(friendStruct);
+			}
+			else
+			{
+				targetSession->asyncWrite(m_packet);
+			}
+		}
+		
+		void Session::flushPendingFriendRequests()
+		{
+			if (m_pendingFriendRequestsQueue.empty()) return;
+			m_packet.setTcpHeader(m_id, Common::Enums::NO_ENCRYPTION);
+			m_packet.setCommand(61, 0, Main::Enums::AddFriendServerExtra::SEND_REQUEST_TO_TARGET, 2);
+			for (auto& friendStruct : m_pendingFriendRequestsQueue)
+			{
+				m_packet.setData(reinterpret_cast<std::uint8_t*>(&friendStruct), sizeof(friendStruct));
+				asyncWrite(m_packet);
+			}
+			m_pendingFriendRequestsQueue.clear();
 		}
 
 		bool Session::removeBossBattleTicket()

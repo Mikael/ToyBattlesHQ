@@ -56,7 +56,7 @@ namespace Main
 			const auto& userItems = session->getPlayer().getItems();
 			if (auto it = userItems.find(boxData.serialInfo.itemNumber); it != userItems.end())
 			{
-				const Main::Structures::Item& boxItem = it->second;
+				const Main::Structures::Item boxItem = it->second;
 
 				if (auto callbackIt = generalItemCallbacks.find(boxItem.itemId.itemId); callbackIt != generalItemCallbacks.end())
 				{ // "normal" general item, e.g. K/D reset, battery
@@ -80,11 +80,11 @@ namespace Main
 					{
 						if (auto callbackIt = cashItemCallbacks.find(currentWonItemId); callbackIt != cashItemCallbacks.end())
 						{ // cash item: mp/coin/coupon
-							callbackIt->second(session);
 							if (!session->deleteItem(boxItem.serialInfo, "The item was deleted after being used (example: MP/coin/coupon items"))
 							{
 								session->sendMessage("Debug) Error while deleting opened cash item");
 							}
+							callbackIt->second(session);
 						}
 						else
 						{ // normal won item

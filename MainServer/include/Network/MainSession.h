@@ -222,9 +222,12 @@ namespace Main
 
 			void acceptFriendRequest(std::shared_ptr<Main::Network::Session> senderSession, const Main::Structures::Friend& target, const std::uint8_t* const data);
 
+    		void flushPendingFriendRequests();
+
 			bool removeBossBattleTicket();
 
 		private:
+    		std::vector<Main::Structures::Friend> m_pendingFriendRequestsQueue{};
 			void handleOfflineFriendRequest(const AccountInfo& accountInfo, const char* nickname);
 			void handleOnlineFriendRequest(std::shared_ptr<Main::Network::Session> targetSession, const AccountInfo& accountInfo);
 
