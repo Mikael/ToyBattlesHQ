@@ -13,6 +13,7 @@
 #include "ItemId.h"
 #include "Macros.h"
 
+
 // Note: Creation date cannot be 0 (otherwise the client doesn't know how to handle equipping/unequipping) !!!
 namespace Main
 {
@@ -22,7 +23,7 @@ PACK_PUSH(1)
 		struct SpawnedItem
 		{
 			Main::Structures::ItemId itemId;
-			__time32_t expirationDate{};
+			time32_t expirationDate{};
 			Main::Structures::ItemSerialInfo serialInfo{};
 			Main::Enums::ItemFrom itemFrom = Main::Enums::ItemFrom::SHOP;
 
@@ -49,7 +50,7 @@ PACK_PUSH(1)
 		struct BoxItem
 		{
 			Main::Structures::ItemId itemId;
-			__time32_t expirationDate{};
+			time32_t expirationDate{};
 			Main::Structures::ItemSerialInfo serialInfo{};
 
 			explicit BoxItem(std::uint32_t id)
@@ -60,7 +61,7 @@ PACK_PUSH(1)
 				serialInfo.itemOrigin = Main::Enums::ItemFrom::SHOP;
 			}
 
-			explicit BoxItem(std::uint32_t id, __time32_t exp, const Main::Structures::ItemSerialInfo& serial)
+			explicit BoxItem(std::uint32_t id, time32_t exp, const Main::Structures::ItemSerialInfo& serial)
 				: itemId{ id }, expirationDate{ exp }, serialInfo{ serial }
 			{
 			}

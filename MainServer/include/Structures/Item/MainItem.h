@@ -21,11 +21,7 @@ PACK_PUSH(1)
 		{
 			// note: If itemnumber = 0 AND creationDate = 0 ==> basic item
 			Main::Structures::ItemId itemId;
-#ifdef _WIN32
-           		 __time32_t expirationDate{};
-#else
-             	 std::int32_t expirationDate{}; 
-#endif
+           	time32_t expirationDate{};
 			ItemSerialInfo serialInfo{};
 			std::uint16_t durability{};
 			std::uint16_t energy{};
@@ -43,11 +39,7 @@ PACK_PUSH(1)
 			explicit Item(const Main::Structures::CapsuleSpin& capsuleItem)
 				: itemId{ capsuleItem.itemId }, serialInfo{ capsuleItem.itemSerialInfo }
 				, durability{ Main::CdbUtils::getItemDurability(capsuleItem.itemId.itemId ).value_or(0) }
-#ifdef _WIN32
-                		, expirationDate{ static_cast<__time32_t>(capsuleItem.expirationDate) }
-#else
-                		, expirationDate{ static_cast<std::int32_t>(capsuleItem.expirationDate) }
-#endif
+                , expirationDate{ static_cast<time32_t>(capsuleItem.expirationDate) }
 			{
 				serialInfo.itemOrigin = Main::Enums::ItemFrom::SHOP;
 			}
@@ -65,22 +57,14 @@ PACK_PUSH(1)
 				: itemId{ equippedItem.id }, serialInfo{ equippedItem.serialInfo }
 				, durability{ equippedItem.durability }, energy{equippedItem.energy}, isSealed { equippedItem.isSealed }, sealLevel{equippedItem.sealLevel}
 				, experienceEnhancement{ equippedItem.experienceEnhancement }, mpEnhancement{ equippedItem.mpEnhancement }
-#ifdef _WIN32
-              		  	, expirationDate{ static_cast<__time32_t>(equippedItem.expirationDate) }
-#else
-                		, expirationDate{ static_cast<std::int32_t>(equippedItem.expirationDate) }
-#endif
+              	, expirationDate{ static_cast<time32_t>(equippedItem.expirationDate) }
 			{
 			}
 
 			Item(const Main::Structures::SpawnedItem& spawnedItem)
 				: itemId{ spawnedItem.itemId }, serialInfo{ spawnedItem.serialInfo } 
 				, durability{ Main::CdbUtils::getItemDurability(spawnedItem.itemId.itemId).value_or(0) }
-#ifdef _WIN32
-              		  	, expirationDate{ static_cast<__time32_t>(spawnedItem.expirationDate ) }
-#else
-                		, expirationDate{ static_cast<std::int32_t>(spawnedItem.expirationDate ) }
-#endif
+              	, expirationDate{ static_cast<time32_t>(spawnedItem.expirationDate ) }
 			{
 				serialInfo.itemOrigin = Main::Enums::ItemFrom::SHOP;
 				itemId.stock = spawnedItem.itemId.stock;
@@ -122,5 +106,4 @@ PACK_POP()
 		};
 	}
 }
-
 #endif

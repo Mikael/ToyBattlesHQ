@@ -4,6 +4,7 @@
 #include "AccountInfo/MainAccountUniqueId.h"
 #include "Macros.h"
 
+
 namespace Main
 {
 	namespace Structures
@@ -38,13 +39,13 @@ PACK_PUSH(1)
             std::uint32_t accountId{};
             std::uint32_t timestamp{}; 
             Main::Structures::ItemId itemId;
-            std::uint32_t expiration{}; // correct
+            std::uint32_t expiration{}; 
             Main::Structures::ItemSerialInfo serialInfo{};
 
             Giftbox2(const Giftbox& giftbox)
                 : itemId{ giftbox.id }, accountId{ giftbox.accountId }, timestamp{ giftbox.timestamp }
             {
-                serialInfo.itemCreationDate = static_cast<__time32_t>(std::time(0));
+                serialInfo.itemCreationDate = static_cast<time32_t>(std::time(0));
                 serialInfo.itemOrigin = 8; // Main::Enums::ItemFrom::GIFT;
             }
         };

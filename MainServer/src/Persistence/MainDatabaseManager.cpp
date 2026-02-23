@@ -20,6 +20,7 @@
 #include "Utils/SetupParser.h"
 #include <cstring> 
 #include <Utils.h>
+#include <Macros.h>
 #include <regex>
 
 namespace Main
@@ -2223,15 +2224,15 @@ namespace Main
                     auto rowId = static_cast<std::uint64_t>(resultSet->getUInt64("rowid"));
                     item.serialInfo.itemOrigin = static_cast<std::uint64_t>(resultSet->getInt64("ItemOrigin"));
                     item.serialInfo.m_serverId = static_cast<std::uint64_t>(resultSet->getInt64("acquisitionServerId"));
-                    item.serialInfo.itemCreationDate = static_cast<__time32_t>(resultSet->getInt64("creationDate"));
+                    item.serialInfo.itemCreationDate = static_cast<time32_t>(resultSet->getInt64("creationDate"));
 
                     item.serialInfo.itemNumber = ++itemNum;
                     itemNumbersToUpdate.emplace_back(std::pair{ rowId, static_cast<unsigned long>(item.serialInfo.itemNumber) });
 
                     const std::uint64_t itemDuration_s = static_cast<std::uint64_t>(resultSet->getInt64("ItemDuration"));
                     item.expirationDate = (itemDuration_s <= 2)
-                        ? static_cast<__time32_t>(itemDuration_s)
-                        : static_cast<__time32_t>(item.serialInfo.itemCreationDate + itemDuration_s);
+                        ? static_cast<time32_t>(itemDuration_s)
+                        : static_cast<time32_t>(item.serialInfo.itemCreationDate + itemDuration_s);
 
                     item.durability = static_cast<std::uint16_t>(resultSet->getInt("durability"));
                     item.energy = static_cast<std::uint16_t>(resultSet->getInt("energy"));
@@ -3785,8 +3786,8 @@ namespace Main
                     auto startTimePoint = std::chrono::system_clock::from_time_t(std::mktime(&startTm));
                     auto endTimePoint = std::chrono::system_clock::from_time_t(std::mktime(&endTm));
 
-                    singleEvent.startDate = static_cast<__time32_t>(std::chrono::system_clock::to_time_t(startTimePoint));
-                    singleEvent.endDate = static_cast<__time32_t>(std::chrono::system_clock::to_time_t(endTimePoint));
+                    singleEvent.startDate = static_cast<time32_t>(std::chrono::system_clock::to_time_t(startTimePoint));
+                    singleEvent.endDate = static_cast<time32_t>(std::chrono::system_clock::to_time_t(endTimePoint));
 
                     events.push_back(singleEvent);
                 }
@@ -3827,8 +3828,8 @@ namespace Main
                     auto startTimePoint = std::chrono::system_clock::from_time_t(std::mktime(&startTm));
                     auto endTimePoint = std::chrono::system_clock::from_time_t(std::mktime(&endTm));
 
-                    singleEvent.startDate = static_cast<__time32_t>(std::chrono::system_clock::to_time_t(startTimePoint));
-                    singleEvent.endDate = static_cast<__time32_t>(std::chrono::system_clock::to_time_t(endTimePoint));
+                    singleEvent.startDate = static_cast<time32_t>(std::chrono::system_clock::to_time_t(startTimePoint));
+                    singleEvent.endDate = static_cast<time32_t>(std::chrono::system_clock::to_time_t(endTimePoint));
 
                     events.push_back(singleEvent);
                 }
@@ -3929,7 +3930,7 @@ namespace Main
                     }
                 }
 
-                Main::Structures::Giftbox giftbox{ accountId, static_cast<__time32_t>(std::time(0)), itemId, itemId, itemId };
+                Main::Structures::Giftbox giftbox{ accountId, static_cast<time32_t>(std::time(0)), itemId, itemId, itemId };
                 std::memcpy(giftbox.nickname, Common::Constants::teamString.c_str(), Common::Constants::teamString.size());
                 std::memcpy(giftbox.message, giftDescription.c_str(), giftDescription.size());
 

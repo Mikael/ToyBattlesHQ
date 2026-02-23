@@ -8,6 +8,7 @@
 #include "../../../include/Structures/Item/MainEquippedItem.h"
 #include "Enums/GameEnums.h"
 #include <ConstantDatabase/Structures/SetItemInfo.h>
+#include "Macros.h"
 
 namespace Main
 {
@@ -15,11 +16,7 @@ namespace Main
 	{
 		EquippedItem::EquippedItem(const Main::Structures::Item& item, std::uint64_t aid)
 			: id{ item.itemId.itemId }
-#ifdef _WIN32
-			, expirationDate{ static_cast<__time32_t>(item.expirationDate) }
-#else
-			, expirationDate{ static_cast<std::int32_t>(item.expirationDate) }
-#endif
+			, expirationDate{ static_cast<time32_t>(item.expirationDate) }
 			, serialInfo{ item.serialInfo }
 			, durability{ item.durability }
 			, energy{ item.energy }

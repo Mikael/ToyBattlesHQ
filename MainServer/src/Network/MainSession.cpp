@@ -546,7 +546,7 @@ namespace Main
 			asyncWrite(m_packet);
 
 			m_scheduler.addRepetitiveCallback(std::source_location::current(), m_player.getAccountID(), &Main::Persistence::PersistentDatabase::prolongItems, m_player.getAccountID(),
-					toProlongItems, itemDurations, static_cast<__time32_t>(std::time(0)));
+					toProlongItems, itemDurations, static_cast<time32_t>(std::time(0)));
 			return true;
 		}
 
@@ -648,9 +648,6 @@ namespace Main
 
 		bool Session::deleteItemBasic(const Main::Structures::ItemSerialInfo& itemSerialInfo, const std::string& caller)
 		{
-			//::Utils::Logger::log("Delete/Sold Item Number: " + std::to_string(itemSerialInfo.itemNumber) + 
-			//	" from User: " + m_player.getAccountInfo().nickname + ", ip: " + m_ip, ::Utils::LogType::Warning);
-
 			if (m_player.deleteItemBasic(itemSerialInfo))
 			{
 				m_scheduler.addRepetitiveCallback(std::source_location::current(), m_player.getAccountID(), 
@@ -659,7 +656,6 @@ namespace Main
 				return true;
 			}
 
-			::Utils::Logger::log("Failed to delete/sell this item", ::Utils::LogType::Error);
 			return false;
 		}
 
@@ -704,7 +700,7 @@ namespace Main
 			auto latestItemNumber = m_player.getLatestItemNumber();
 			convertedItem.serialInfo.itemNumber = ++latestItemNumber;
 			m_player.setLatestItemNumber(latestItemNumber);
-			convertedItem.serialInfo.itemCreationDate = static_cast<__time32_t>(std::time(0));
+			convertedItem.serialInfo.itemCreationDate = static_cast<time32_t>(std::time(0));
 			convertedItem.durability = Main::CdbUtils::getItemDurability(item.id).value_or(0);
 			const std::uint32_t duration = Main::CdbUtils::getItemDuration(item.id);
 			convertedItem.expirationDate = duration <= 3 ? duration : convertedItem.serialInfo.itemCreationDate + duration;
@@ -1025,7 +1021,7 @@ namespace Main
 			spawnedItem.serialInfo.itemNumber = m_player.getLatestItemNumber() + 1;
 
 			const auto duration = CdbUtils::getItemDuration(itemId);
-			spawnedItem.expirationDate = duration <= 3 ? static_cast<__time32_t>(duration) : static_cast<time_t>(std::time(0)) + duration;
+			spawnedItem.expirationDate = duration <= 3 ? static_cast<time32_t>(duration) : static_cast<time_t>(std::time(0)) + duration;
 			if (addItem(Item{ spawnedItem }))
 			{
 				m_packet.setCommand(66, 0, 51, 2);
@@ -1123,7 +1119,7 @@ namespace Main
 				asyncWrite(m_packet);
 
 				
-				Main::Structures::Giftbox giftbox{ m_player.getAccountInfo().accountID, static_cast<__time32_t>(std::time(0)), itemId, itemId, itemId };
+				Main::Structures::Giftbox giftbox{ m_player.getAccountInfo().accountID, static_cast<time32_t>(std::time(0)), itemId, itemId, itemId };
 				std::memcpy(giftbox.nickname, Common::Constants::teamString.c_str(), Common::Constants::teamString.size());
 				std::memcpy(giftbox.message, giftDescription.c_str(), giftDescription.size());
 				addGiftboxReceived(giftbox);

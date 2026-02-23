@@ -9,6 +9,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <Macros.h>
+
 
 namespace Main
 {
@@ -37,7 +39,7 @@ namespace Main
 						giftbox.serialInfo.m_serverId = serverId;
 						session->setLatestItemNumber(latestItemNumber);
 						const std::uint32_t duration = Main::CdbUtils::getItemDuration(giftbox.itemId.itemId);
-						giftbox.expiration = duration <= 3 ? duration : static_cast<__time32_t>(std::time(0)) + duration;
+						giftbox.expiration = duration <= 3 ? duration : static_cast<time32_t>(std::time(0)) + duration;
 
 						if (session->addItem(giftbox))
 						{

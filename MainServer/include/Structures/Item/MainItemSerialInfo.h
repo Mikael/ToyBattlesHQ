@@ -6,11 +6,6 @@
 #include <compare>
 #include "Macros.h"
 
-#ifdef WIN32
-#include <corecrt.h>
-#else
-#define __time32_t uint32_t
-#endif
 
 namespace Main
 {
@@ -30,7 +25,7 @@ PACK_PUSH(1)
 			ItemSerialInfo()
 			{
 				// this is necessary, itemCreationDate can't be 0 otherwise the client doesn't know how to handle equipping/unequipping of items
-				itemCreationDate = static_cast<__time32_t>(std::time(0)); 
+				itemCreationDate = static_cast<time32_t>(std::time(0)); 
 			}
 		};
 PACK_POP()

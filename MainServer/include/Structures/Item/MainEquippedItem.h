@@ -12,18 +12,13 @@ namespace Main
 	{
 		class Item;
 
-#ifdef _WIN32
-		using ExpirationTimeType = __time32_t;
-#else
-		using ExpirationTimeType = std::int32_t;
-#endif
 
 PACK_PUSH(1)
 		struct EquippedItem
 		{
 			std::uint32_t type : 9 = 0; 
 			std::uint32_t id : 23 = 0;    
-			ExpirationTimeType expirationDate{}; 
+			time32_t expirationDate{}; 
 			ItemSerialInfo serialInfo{};
 			std::uint16_t durability{}; 
 			std::uint16_t energy{};
