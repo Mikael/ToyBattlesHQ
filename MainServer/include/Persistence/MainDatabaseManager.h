@@ -56,6 +56,8 @@ namespace Main
 			std::pair<Main::Enums::GetPendingRequestsResult, std::vector<std::string>> getPendingRequests(std::uint32_t accountId);
 			Main::Enums::AcceptClanRequestResult acceptClanRequest(std::uint32_t ownerAccountId, const std::string& targetNickname);
 			Main::Enums::DenyClanRequestResult denyClanRequest(std::uint32_t ownerAccountId, const std::string& targetNickname);
+			bool updateUsernameByAid(std::uint32_t accountId,const std::string& newUsername, const std::string& oldUsername);
+			bool checkUsernameExists(const std::string& username);
 			Main::Enums::KickClanMemberResult kickClanMember(std::uint32_t ownerAccountId, const std::string& targetNickname);
 			Main::Enums::LeaveClanResult leaveClan(std::uint32_t accountId);
 			Main::Enums::DisbandClanResult disbandClan(std::uint32_t ownerAccountId);

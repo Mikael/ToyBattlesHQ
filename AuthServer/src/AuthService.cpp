@@ -195,87 +195,14 @@ namespace Auth
 
 
 	Auth::Enums::Login AuthService::authorizeUngraded(const Auth::Structures::BasicAccountInfo& ainfo,const std::optional<std::string>& token,const std::string& plainPw)
-	{
-		const bool enhancedSecurity = Common::Utils::SetupParser::getInstance().getAuthSetup().enhancedSecurity;
-		const bool passwordOk = validatePassword(plainPw, ainfo.hashedPassword);
-
-		bool tokenOk = true;
-		if (ainfo.secret.empty())
+	{	
+		if (!validatePassword(plainPw, ainfo.hashedPassword))
 		{
-			if (enhancedSecurity)
-			{
-				m_persistentDatabase.logGameEvent("AuthUngradedLogin",
-					"Failed login: missing mandatory secret for ungraded account " + std::to_string(ainfo.ainfoClient.accountId),"MEDIUM");
-				return Auth::Enums::Login::INCORRECT;
-			}
-		}
-		if (!ainfo.secret.empty())
-		{
-			tokenOk = verifyToken(ainfo.secret, token);
+			return Auth::Enums::Login::INCORRECT;
 		}
 
-		auto& counters = m_badLoginAttempts[ainfo.ainfoClient.accountId];
-		if (!passwordOk)
-		{
-			++counters.totalWrongPasswords;
-			m_persistentDatabase.logGameEvent("AuthUngradedLogin",
-				"Failed login: incorrect password for ungraded account " + std::to_string(ainfo.ainfoClient.accountId),"LOW");
-		}
-		else if (!tokenOk)
-		{
-			++counters.totalWrong2fas;
-			m_persistentDatabase.logGameEvent("AuthUngradedLogin",
-				"Failed login: invalid 2FA token for ungraded account " + std::to_string(ainfo.ainfoClient.accountId),"LOW");
-		}
-
-		constexpr std::uint32_t MAX_2FA_ATTEMPTS = 5;
 		std::uint64_t suspendedUntilEpoch = Common::Utils::datetimeToEpoch(ainfo.suspendedUntil);
 		std::uint64_t currentEpoch = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-
-		if (counters.totalWrong2fas >= MAX_2FA_ATTEMPTS && enhancedSecurity)
-		{
-			if (suspendedUntilEpoch > currentEpoch)
-			{
-				return Auth::Enums::Login::INCORRECT;
-			}
-			if (auto decrypted = Common::Utils::decryptEmail(ainfo.encryptedEmail, Common::Utils::SetupParser::getInstance().getGeneralSetup().emailSecret))
-			{
-				m_emailDispatcher.sendEmailAsync({ decrypted.value() }, "[Security] Your ToyBattles account was banned",          
-					"This is an automatic notification. For security reasons, your TB account was suspended due to 5 wrong login attempts in the game (5 wrong 2FA tokens used).",
-					[accountId = ainfo.ainfoClient.accountId, this]() {
-						m_persistentDatabase.logGameEvent("EmailNotification",
-							"Failed to send email to target after the account was locked due to too many 2FA wrong attempts for accountID: " + std::to_string(accountId),
-							"HIGH");
-					}
-				);
-			}
-			else
-			{
-				m_persistentDatabase.logGameEvent("EmailDecryption",
-					"Failed to decrypt email to contact target after their account was locked due to too many 2FA wrong attempts for accountID: " 
-					+ std::to_string(ainfo.ainfoClient.accountId), "HIGH");
-			}
-			if (!tryLockAccount(ainfo.ainfoClient.accountId, false))
-			{
-				m_persistentDatabase.logGameEvent("AuthUngradedLogin",
-					"Account lock attempt failed for ungraded account " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
-				return Auth::Enums::Login::INCORRECT;
-			}
-
-			m_persistentDatabase.logGameEvent("AuthUngradedLogin",
-				"Account locked due to repeated failed 2FA attempts: " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
-
-			m_badLoginAttempts.erase(ainfo.ainfoClient.accountId);
-			return Auth::Enums::Login::INCORRECT;
-		}
-
-		if (!passwordOk || !tokenOk)
-		{
-			return Auth::Enums::Login::INCORRECT;
-		}
-
-		m_badLoginAttempts.erase(ainfo.ainfoClient.accountId);
-
 		if (suspendedUntilEpoch > currentEpoch)
 		{
 			m_persistentDatabase.logGameEvent("AuthUngradedLogin","Login attempt on suspended ungraded account " + std::to_string(ainfo.ainfoClient.accountId),"LOW");

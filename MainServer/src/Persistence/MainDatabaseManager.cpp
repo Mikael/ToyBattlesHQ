@@ -1700,6 +1700,53 @@ namespace Main
             }
         }
 
+        bool PersistentDatabase::updateUsernameByAid(std::uint32_t accountId,
+            const std::string& newUsername, const std::string& oldUsername)
+        {
+            try
+            {
+                std::string queryStr = "UPDATE Users SET Username = ? WHERE AccountID = ?";
+
+                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(queryStr));
+                stmt->setString(1, newUsername);
+                stmt->setUInt(2, accountId);
+
+                return stmt->executeUpdate() > 0;
+            }
+            catch (const sql::SQLException& e)
+            {
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()),
+                    Utils::LogType::Error, "PersistentDatabase::updateUsernameByAid");
+                return false;
+            }
+        }
+
+        bool PersistentDatabase::checkUsernameExists(const std::string& username)
+        {
+            try
+            {
+                std::string queryStr = "SELECT COUNT(*) FROM Users WHERE LOWER(Username) = LOWER(?)";
+
+                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(queryStr));
+                stmt->setString(1, username);
+
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
+
+                if (res->next())
+                {
+                    return res->getInt(1) > 0;
+                }
+
+                return false;
+            }
+            catch (const sql::SQLException& e)
+            {
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::checkUsernameExists");
+
+                return true;
+            }
+        }
+
         bool PersistentDatabase::logGameEvent(const std::string& logType, const std::string& message, const std::string& severity)
         {
             try

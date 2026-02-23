@@ -51,6 +51,8 @@ namespace Main
 			bool m_isInvisible{};
 
 			std::uint32_t m_totalWrongPasswordReset{};
+			std::uint32_t m_totalWrong2FaUsernameChange{};
+			std::uint32_t m_totalWrongUsernameChange{};
 			std::uint32_t m_totalWrong2FaReset{};
 
 			std::string m_hwid{ "" };
