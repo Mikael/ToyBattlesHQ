@@ -166,6 +166,10 @@ Both values are:
 - Implemented as defined in `Common/Utils.h` (refer to source for exact format)
 
 ---
+### Graded Access Login with 2FA
+Username: you need to input `Username+2FaToken`, where 2FaToken is the 6 digit code from an authenticator application.
+For example, if the mod's username is "mod" and their 6digit code is 123456, their username will need to be written as `mod+123456`.
+---
 
 ## Ungraded Accounts
 
@@ -176,9 +180,6 @@ For regular users:
   - `/changeusername`
 
 ---
-### Graded Access Login with 2FA
-Username: you need to input `Username+2FaToken`, where 2FaToken is the 6 digit code from an authenticator application.
-For example, if the mod's username is "mod" and their 6digit code is 123456, their username will need to be written as `mod+123456`.
 
 ## Account Creation: `/addplayer`
 
