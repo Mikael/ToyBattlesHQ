@@ -196,3 +196,6 @@ For production environments, it is strongly recommended to:
 - Avoid manual account provisioning whenever possible.
 
 ---
+
+[3.3 Setting up the database](https://github.com/SoWeBegin/MicrovoltsEmulator/blob/mv1.1_2.0/doc/database_setup.md)
+
