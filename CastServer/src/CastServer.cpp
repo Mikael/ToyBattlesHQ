@@ -381,9 +381,23 @@ namespace Cast
 					if (remoteEndpoint.address() == asio::ip::address::from_string(Common::Utils::SetupParser::getInstance().getSelfMainServerInfo().ip) ||
 						remoteEndpoint.address() == asio::ip::address::from_string("::1"))
 					{
-						auto mainIpc = std::make_shared<Common::Network::Session>(std::move(*m_mainSocket), nullptr);
+						auto mainIpc = std::make_shared<Common::Network::Session>( std::move(*m_mainSocket),
+							[this](std::size_t ipcId)
+							{
+								auto it = m_mainIpcSessions.find(ipcId);
+								if (it != m_mainIpcSessions.end()) {
+									std::cout << "MainServer IPC session " << ipcId << " removed\n";
+									m_mainIpcSessions.erase(it);
+								}
+							},
+							true  
+						);
+
 						mainIpc->m_checkValidSession = false;
+						m_mainIpcSessions[mainIpc->getIpcId()] = mainIpc;
 						mainIpc->sendConnectionACK(Common::Enums::IPC_SERVER);
+
+						std::cout << "New MainServer IPC connection accepted with ID: " << mainIpc->getIpcId() << "\n";
 					}
 					else
 					{

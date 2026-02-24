@@ -152,18 +152,24 @@ namespace Common
 				return;
 			}
 
-			if ((!m_checkValidSession && m_onCloseSocketCallback) || (m_isValidSession && m_onCloseSocketCallback))
+			if (m_ipcId != 0) 
+			{
+				if (m_onCloseSocketCallback) 
+				{
+					m_onCloseSocketCallback(m_ipcId);  
+				}
+			}
+			else if ((!m_checkValidSession && m_onCloseSocketCallback) || (m_isValidSession && m_onCloseSocketCallback))
 			{
 				m_onCloseSocketCallback(m_id);
 			}
 
 			asio::error_code errorCode;
 			auto endPoint = m_socket.remote_endpoint(errorCode);
-			
+
 			m_socket.shutdown(tcp::socket::shutdown_both, errorCode);
 			m_socket.close(errorCode);
 		}
-
 
 		// Default implementation is used for IPC
 		void Session::onPacket(std::vector<std::uint8_t>& data)

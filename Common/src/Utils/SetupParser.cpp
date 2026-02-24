@@ -431,9 +431,7 @@ namespace Common
             auth.port = m_iniFile["AuthServer"]["Port"].as<std::uint32_t>();
             auth.gradedPort = m_iniFile["AuthServer"]["GradedPort"].as<std::uint32_t>();
             auth.enhancedSecurity = m_iniFile["AuthServer"]["EnhancedSecurity"].as<bool>();
-
-            if (auth.enhancedSecurity)
-                auth.vpnIp = m_iniFile["AuthServer"]["VpnIp"].as<std::string>();
+            auth.vpnIp = m_iniFile["AuthServer"]["VpnIp"].as<std::string>();
 
             return auth;
         }

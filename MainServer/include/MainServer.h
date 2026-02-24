@@ -12,6 +12,7 @@
 #include "Classes/ClansManager.h"
 
 #include <iostream>
+#include <unordered_map>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio.hpp>
 
@@ -37,6 +38,7 @@ namespace Main
 		bool m_roomCreationEnabled{ true };
 		bool m_isPublic{ true };
 		std::uint64_t m_timeSinceLastRestart{};
+		std::unordered_map<std::size_t, std::shared_ptr<Common::Network::Session>> m_ipcSessions;
 
 		Main::Persistence::PersistentDatabase m_database;
 		Main::Persistence::MainScheduler m_scheduler;
