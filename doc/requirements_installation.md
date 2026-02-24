@@ -12,7 +12,7 @@ If you want an easy setup for Linux (based on Docker), then [this repository](ht
 
 
 ### 3.1.2.2 Manual setup (Windows)
-1) Clone this repository then go to its folder: `cd <YourEmulatorProjectPath>` - make sure you are inside the MicrovoltsEmulator folder (root of this repository)
+1) Clone this repository then go to its folder: `cd <YourEmulatorProjectPath>` - make sure you are inside the ToyBattlesHQ folder (root of this repository)
 2) Clone vcpkg inside ExternalLibraries: `git clone https://github.com/microsoft/vcpkg.git ExternalLibraries\vcpkg`
 3) Bootstrap it: `.\ExternalLibraries\vcpkg\bootstrap-vcpkg.bat`
 4) Generate build files: `cmake -B build -S . -A x64 -DCMAKE_TOOLCHAIN_FILE=ExternalLibraries/vcpkg/scripts/buildsystems/vcpkg.cmake`
@@ -20,7 +20,7 @@ If you want an easy setup for Linux (based on Docker), then [this repository](ht
 6) Output (exes) inside Release folder
 
 ### 3.1.2.3 Manual setup (Linux)
-1) Clone this repository then go to its folder: `cd <YourEmulatorProjectPath` - make sure you are inside the MicrovoltsEmulator folder (root of this repository)
+1) Clone this repository then go to its folder: `cd <YourEmulatorProjectPath` - make sure you are inside the ToyBattlesHQ folder (root of this repository)
 2) Clone vcpkg inside ExternalLibraries: `git clone https://github.com/microsoft/vcpkg.git`
 3) Bootstrap it: `./ExternalLibraries/vcpkg/bootstrap-vcpkg.sh`
 4) Generate build files: `cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=ExternalLibraries/vcpkg/scripts/buildsystems/vcpkg.cmake`
