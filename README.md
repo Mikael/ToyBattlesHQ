@@ -50,6 +50,7 @@ Adding this new documentation may take a while, so bear with us...
   - [3.1.2.2 Manual Installation: Windows](https://github.com/SoWeBegin/MicrovoltsEmulator/blob/mv1.1_2.0/doc/requirements_installation.md)
   - [3.1.2.3 Manual Installation: Linux](https://github.com/SoWeBegin/MicrovoltsEmulator/blob/mv1.1_2.0/doc/requirements_installation.md)
 - [3.2 Setting up the emulator](https://github.com/SoWeBegin/MicrovoltsEmulator/blob/mv1.1_2.0/doc/setting_up.md)
+  - [3.2.1 Enhanced Security](https://github.com/SoWeBegin/ToyBattlesHQ/blob/toybattles_mvsurge/doc/enhanced_security.md) <sub><img width="35" height="50" alt="new" src="https://github.com/user-attachments/assets/be690f81-7566-42ed-815a-e4683898bbd7" /></sub>
 - [3.3 Setting up the database](https://github.com/SoWeBegin/MicrovoltsEmulator/blob/mv1.1_2.0/doc/database_setup.md)
   - [3.3.1 Windows Setup](https://github.com/SoWeBegin/MicrovoltsEmulator/blob/mv1.1_2.0/doc/database_setup.md)
   - [3.3.2 Linux Setup](https://github.com/SoWeBegin/MicrovoltsEmulator/blob/mv1.1_2.0/doc/database_setup.md)
