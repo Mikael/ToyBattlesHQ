@@ -16,6 +16,9 @@ Then, here's a simple setup for a VPS:
 LocalIp = 123.456.78.9
 Ip = 199.222.32.3
 Port = 13000
+GradedPort = 13001 # Block this port on firewall and only allow Wireguard peers to use it!
+VpnIp = 127.0.0.1  # Use e.g. Wireguard IP (server side) - server will listen to this IP + GradedPort for graded access
+EnhancedSecurity = false
 
 [MainServer_1]
 LocalIp = 123.456.78.9
@@ -29,6 +32,7 @@ LocalIp = 123.456.78.9
 Ip = 199.222.32.3
 Port = 13006
 IpcPort = 14006
+IPC_EnableDeadBroadcast = true
 
 [Database]
 LocalIp = 123.456.78.9
@@ -41,9 +45,21 @@ PasswordEnvironmentName = MV_DB_PW
 [Website]
 Ip = 199.222.32.3
 Port = 8080
+JwtTokenEnvironmentName = MV_JWT
+AllowedOrigins = www.allowedOriginTest.com
 
 [Client]
 ClientVersion = 0.0.3 # For ToyBattles Client in this repository; for original MV Surge client use 1.1.1
+
+[General]
+EmailSecret = MVEMAIL_SECRET # environment variable containing email encryption key (in hex form without 0x, 32 bytes) 
+2faSecret = MV2FA_SECRET     # environment variable containing game 2FA encryption key (in hex form without 0x, 32 bytes) 
+SmtpServer = smtp://smtp.gmail.com:587  # example if you use gmail
+EmailSender = sendertest@gmail.com
+EmailUsername = emailusername # or use EmailSender depending on the service you're using
+EmailToken = MV_EMAIL_TOKEN   # environment variable containing email token to send emails using EmailSender above
+SecurityNotificationReceiver = receiver1@gmail.com,  receiver2@gmail.com  # who will receive security notifications
+
 ```
 
 
