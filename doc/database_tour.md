@@ -12,20 +12,17 @@ This isn’t a full walkthrough: I’ll just highlight the key tables and point 
 
 ### `Users` Table
 This table contains all information regarding a specific player: accountID, usernames, nicknames, passwords, level, kills, experience, to name a few.
-- For security reasons, the password is not in plain text. Instead, you must use SHA256.
-- The 2FA for graded accounts (grade > 1) (or even normal ones if you wish) must be setup in this table. The column name is `Secret` and it must be a base32 hash (for example: `MRSG4NJVNZSDKZDS`). The 2FA is time-based, any application like Google Authenticator will work.
-
+- For security reasons, the password is not in plain text. Instead, you must use **bcrypt** (12 rounds).
+- The 2FA for graded accounts (grade > 1) (or even normal ones if you wish) must be setup in this table. The column name is `Secret` and it must be a base32 **encrypted** hash. The 2FA is time-based, any application like Google Authenticator will work. To see how encryption works, i.e. AES GCM, see the code in `Common/Utils.h`.
+- This table also contains an encrypted email. Once again, check `Common/Utils.h` to see how it works and the correct format to use.
+- 
 #### Examples
-- To change the login and password for the "test" account, use `UPDATE Users SET Username="NEW_LOGIN", Password="NEW_SHA256_PASSWORD" WHERE Username="test"`.
-- You can convert your plain-text password to SHA256 by using any online tools.
+- To change the login and password for the "test" account, use `UPDATE Users SET Username="NEW_LOGIN", Password="NEW_BCRYPT12ROUNDS_PASSWORD" WHERE Username="test"`.
+- You can convert your plain-text password to bcrypt (12 rounds) by using any online tool.
 - To give yourself ingame currency: `UPDATE Users SET MicroPoints=50000, RockTotens=50000, Coupons=250 WHERE Username="test"`
-- To create a new account: `INSERT INTO users (Username, Password, Nickname) VALUES ('test1', SHA2('test1', 256), 'test1');`
 
 #### Graded accounts require mandatory 2FA. To enable it:
-1) Generate a BASE32 hash (for example here: https://tools.chilkat.io/random?utm_source=chatgpt.com) (Use "10 bytes", select encoding "Base32". Output example: `OUNYPQNKWG5FMKYK`
-2) Create a new Google Authenticator (or any other app you may use on your mobile device) time-based token using the generated base32 string (in our example, `OUNYPQNKWG5FMKYK`).
-3) Set the Secret key in the database: `UPDATE Users SET Secret="YOUR_BASE32_STRING_HERE"`. In our example, this would be `UPDATE Users SET Secret="OUNYPQNKWG5FMKYK"`.
-4) 2FA is now setup. When you login, the first password must be your normal password. The client will then prompt you to insert your 2FA token (that you can see in your mobile application like Google Authenticator) on the next login. If either the password or token is wrong, you will have to start again by inserting your password.
+Log in the game via a graded account. Generate a new account through it with `/addplayer NewUsername NewNickname Email`. You will receive a random password and 2FA code (to setup 2FA). Then, you can simply update the new user's grade via the database.
    
 **Note** The following is what each user grade is.
 - Grade 1: Normal users - 2fa not mandatory. (lowest grade)
@@ -34,7 +31,8 @@ This table contains all information regarding a specific player: accountID, user
 - Grade 4: Game Master (GM)
 - Grade 7: Developer
 
-All grades above 1 require mandatory 2FA. You won't be able to login otherwise since the server checks this. (This may be added as an optional feature that can be disabled in the future).
+All grades above 2 require mandatory 2FA. You won't be able to login otherwise since the server checks this. (This may be added as an optional feature that can be disabled in the future).
+To login with 2FA, you need this format instead of your usual username when logging in: `Username+6digitcode` (with the `+` in between).
 
 Notes:
 - Higher grade means higher power & more commands.
@@ -42,11 +40,8 @@ Notes:
 - The `Nickname` can be at maximum 16 characters.
 
 #### Clan Creation
-1) First, add a new clan in the `Clans` Table: `"INSERT INTO Clans (ClanId, Clanname, ClanFrontIcon, ClanBackIcon) VALUES (1, "TestClan", 2, 4)"`
-2) Next, update the user's clan so it references the newly created clan: `"UPDATE Users ClanID = 1, ClanMemberType = "CaptainA" WHERE Username = ?"`
-- Note that in the above examples, we used the same ClanID in both queries!
-- Also note that ClanID is unique. Two clans cannot have the same ClanID, of course.
-- Finally, "ClanMemberType" is used only by the website (if you make one). Captains can for example accept new clan members or kick existing ones.
+All commands to create and handle clans are now available directly inside the game. Use the `/commands` command to see available commands. 
+It is no longer necessary to modify the database directly for clan creation.
 
 ### `UserItems` Table
 This table contains all information regarding user items. Each user is identified by an accountID, and each row represents an item that a player identified by their accountID has.
