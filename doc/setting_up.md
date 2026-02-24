@@ -16,6 +16,12 @@ This section configures your authentication server, which handles player logins.
 
 **Port**: The port used by the Auth Server, default is 13000.
 
+**GradedPort**: The port used by the Auth Server for moderator/administrator login, default is 13001. This is required, but will only be used if `EnhancedSecurity = true`.
+
+**VpnIp**: VPN that the servers will listen to on port `GradedPort` for graded access. For more info, see the Enhanced Security section in this documentation.
+
+**EnhancedSecurity**: Specifies whether graded access must require strict login. See the Enhanced Security section in this documentation.
+
 ### [MainServer_N]
 Examples: MainServer_1, MainServer_2, ..., up to MainServer_9
 
@@ -43,6 +49,9 @@ These handle all in-match/gameplay logic like damage, position updates, match ru
 
 **IpcPort**: Used for inter-server communication
 
+**EnableDeadBroadcast**: This setting is particularly important in multi-region server deployments. For instance, if you run a NA VPS hosting a cast server, while your EU VPS hosts all main servers along with the EU cast server, you should set EnableDeadBroadcast to false on the NA server. Otherwise, every time a player dies, the NA cast server would need to communicate with the NA main server located on the EU VPS. This cross-region communication can introduce unnecessary delays and increase latency.
+
+
 ### [Database]
 Connection settings for your MariaDB database.
 
@@ -61,7 +70,7 @@ Connection settings for your MariaDB database.
 ### [Website]
 Defines the API endpoint used for admin panel or external requests.
 
-**Ip**: IP of the admin panel backend (often 127.0.0.1).
+**Ip**: IP of the admin panel backend (often 127.0.0.1). Ideally you should also restrict the port access below via firewall rules.
 
 **Port**: Port your panel or API runs on (e.g., 8080).
 
@@ -75,6 +84,22 @@ The servers check the ClientVersion. If you specify a client version (e.g. 1.1.1
 Graded accounts don't have this limitation, this allows graded accounts to enter the server even with different clients, for example for testing purposes.
 
 Note that for ToyBattles Client (on the Release section on this Repository), the client version is 0.0.3. If you decide to use the original Microvolts Surge client (although discouraged) you will need to use version 1.1.1.
+
+
+### [General]
+**EmailSecret**: environment variable containing email encryption key (in hex form without 0x, 32 bytes) 
+
+**2faSecret**: environment variable containing game 2FA encryption key (in hex form without 0x, 32 bytes) 
+
+**SmtpServer**: SMTP server used to use the email alerting system, see Enhanced Security for more info.
+
+**EmailSender**: The email used to send security emails.
+
+**EmailUsername**: This can be the same as EmailSender or a specific username you may have.
+
+**EmailToken**: The specific App password to use the above email for security comunication.
+
+**SecurityNotificationReceiver**: Whoever will receive security related emails, ideally only administrators.
 
 # ⚠️ Notes & Warnings
 You can configure up to 9 Main Servers and 9 Cast Servers.
