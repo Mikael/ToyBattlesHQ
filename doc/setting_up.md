@@ -91,4 +91,5 @@ I’ll also provide example setup.ini files for different setups in later chapte
 
 
 ## Next
-[3.3 Setting up the database](https://github.com/SoWeBegin/MicrovoltsEmulator/blob/mv1.1_2.0/doc/database_setup.md)
+[3.2.1 Enhanced Security](https://github.com/SoWeBegin/ToyBattlesHQ/blob/toybattles_mvsurge/doc/enhanced_security.md)
+
