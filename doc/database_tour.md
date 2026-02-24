@@ -13,9 +13,9 @@ This isn’t a full walkthrough: I’ll just highlight the key tables and point 
 ### `Users` Table
 This table contains all information regarding a specific player: accountID, usernames, nicknames, passwords, level, kills, experience, to name a few.
 - For security reasons, the password is not in plain text. Instead, you must use **bcrypt** (12 rounds).
-- The 2FA for graded accounts (grade > 1) (or even normal ones if you wish) must be setup in this table. The column name is `Secret` and it must be a base32 **encrypted** hash. The 2FA is time-based, any application like Google Authenticator will work. To see how encryption works, i.e. AES GCM, see the code in `Common/Utils.h`.
+- The 2FA for graded accounts (grade > 2) (or even normal ones if you wish) must be setup in this table. The column name is `Secret` and it must be a base32 **encrypted** hash. The 2FA is time-based, any application like Google Authenticator will work. To see how encryption works, i.e. AES GCM, see the code in `Common/Utils.h`.
 - This table also contains an encrypted email. Once again, check `Common/Utils.h` to see how it works and the correct format to use.
-- 
+  
 #### Examples
 - To change the login and password for the "test" account, use `UPDATE Users SET Username="NEW_LOGIN", Password="NEW_BCRYPT12ROUNDS_PASSWORD" WHERE Username="test"`.
 - You can convert your plain-text password to bcrypt (12 rounds) by using any online tool.
