@@ -40,6 +40,9 @@ To be sure of the setup in all VPS, just copy paste the emulator in all of them.
 LocalIp = 123.456.78.9
 Ip = 199.222.32.3
 Port = 13000
+GradedPort = 13001 # Block this port on firewall and only allow Wireguard peers to use it!
+VpnIp = 127.0.0.1  # Use e.g. Wireguard IP (server side) - server will listen to this IP + GradedPort for graded access
+EnhancedSecurity = false
 
 [MainServer_1] # This is for the first server (the first VPS)
 LocalIp = 123.456.78.9
@@ -53,6 +56,7 @@ LocalIp = 123.456.78.9
 Ip = 199.222.32.3
 Port = 13006
 IpcPort = 14006
+IPC_EnableDeadBroadcast = true
 
 [MainServer_2]                # This is for the second server (the second VPS)
 LocalIp = 127.0.0.1           # Localhost here on purpose!
@@ -66,6 +70,7 @@ LocalIp = 127.0.0.1           # Localhost here on purpose!
 Ip = 182.243.34.5             # Second VPS ip here -- The cast server goes in its respective VPS!
 Port = 13028
 IpcPort = 14028
+IPC_EnableDeadBroadcast = false
 
 [Database]
 LocalIp = 123.456.78.9        # First VPS local IP
@@ -78,9 +83,20 @@ PasswordEnvironmentName = MV_DB_PW
 [Website]
 Ip = 127.0.0.1               # We don't have a website / admin panel
 Port = 8080
+JwtTokenEnvironmentName = MV_JWT
+AllowedOrigins = www.allowedOriginTest.com
 
 [Client]
 ClientVersion = 0.0.3 # For ToyBattles Client in this repository; for original MV Surge client use 1.1.1
+
+[General]
+EmailSecret = MVEMAIL_SECRET # environment variable containing email encryption key (in hex form without 0x, 32 bytes) 
+2faSecret = MV2FA_SECRET     # environment variable containing game 2FA encryption key (in hex form without 0x, 32 bytes) 
+SmtpServer = smtp://smtp.gmail.com:587  # example if you use gmail
+EmailSender = sendertest@gmail.com
+EmailUsername = emailusername # or use EmailSender depending on the service you're using
+EmailToken = MV_EMAIL_TOKEN   # environment variable containing email token to send emails using EmailSender above
+SecurityNotificationReceiver = receiver1@gmail.com,  receiver2@gmail.com  # who will receive security notifications
 ```
 
 ## Setup (config.ini) for the seoond VPS
@@ -89,6 +105,9 @@ ClientVersion = 0.0.3 # For ToyBattles Client in this repository; for original M
 LocalIp = 123.456.78.9      # First VPS ip on purpose
 Ip = 199.222.32.3           # First VPS local ip on purpose
 Port = 13000
+GradedPort = 13001 # Block this port on firewall and only allow Wireguard peers to use it!
+VpnIp = 127.0.0.1  # Use e.g. Wireguard IP (server side) - server will listen to this IP + GradedPort for graded access
+EnhancedSecurity = false
 
 # Same as for the previous setup here.
 [MainServer_1]              # This is for the first server (the first VPS)
@@ -104,6 +123,7 @@ LocalIp = 123.456.78.9
 Ip = 199.222.32.3
 Port = 13006
 IpcPort = 14006
+IPC_EnableDeadBroadcast = true
 
 [MainServer_2]                # This is for the second server (the second VPS)
 LocalIp = 127.0.0.1           # Localhost here on purpose!
@@ -117,6 +137,7 @@ LocalIp = 987.543.21.1        # Second VPS local IP
 Ip = 182.243.34.5             # Second VPS ip here, because the cast server goes in its respective VPS
 Port = 13028
 IpcPort = 14028
+IPC_EnableDeadBroadcast = false
 
 [Database]
 LocalIp = 123.456.78.9        # First VPS local IP
@@ -129,9 +150,23 @@ PasswordEnvironmentName = MV_DB_PW
 [Website]
 Ip = 127.0.0.1               # We don't have a website / admin panel
 Port = 8080
+JwtTokenEnvironmentName = MV_JWT
+AllowedOrigins = www.allowedOriginTest.com
 
 [Client]
 ClientVersion = 0.0.3 # For ToyBattles Client in this repository; for original MV Surge client use 1.1.1
+
+[General]
+EmailSecret = MVEMAIL_SECRET # environment variable containing email encryption key (in hex form without 0x, 32 bytes) 
+2faSecret = MV2FA_SECRET     # environment variable containing game 2FA encryption key (in hex form without 0x, 32 bytes) 
+SmtpServer = smtp://smtp.gmail.com:587  # example if you use gmail
+EmailSender = sendertest@gmail.com
+EmailUsername = emailusername # or use EmailSender depending on the service you're using
+EmailToken = MV_EMAIL_TOKEN   # environment variable containing email token to send emails using EmailSender above
+SecurityNotificationReceiver = receiver1@gmail.com,  receiver2@gmail.com  # who will receive security notifications
+
+
+
 ```
 
 
