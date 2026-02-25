@@ -72,7 +72,7 @@ namespace Auth
 
                         std::vector<std::uint8_t> responseBuffer(Common::Constants::maxPacketBytes);
                         asio::steady_timer timer(ioContext);
-                        timer.expires_after(std::chrono::milliseconds(300));
+                        timer.expires_after(std::chrono::milliseconds(2000));
 
                         std::size_t bytesRead = 0;
                         socket.async_read_some(asio::buffer(responseBuffer), [&](const std::error_code& error, std::size_t length) {
