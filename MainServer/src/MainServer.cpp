@@ -411,29 +411,14 @@ namespace Main
 					if (remoteEndpoint.address() == asio::ip::address::from_string(Common::Utils::SetupParser::getInstance().getAuthSetup().ip)
 						|| remoteEndpoint.address() == asio::ip::address::from_string(Common::Utils::SetupParser::getInstance().getSelfCastServerInfo().ip))
 					{
-						auto authIpc = std::make_shared<Common::Network::Session>(std::move(*m_ipcSocket),
-							[this](std::size_t ipcId)
-							{
-								auto it = m_ipcSessions.find(ipcId);
-								if (it != m_ipcSessions.end()) 
-								{
-									m_ipcSessions.erase(it);
-									std::cout << "IPC session " << ipcId << " removed successfully\n";
-								}
-							},
-							true  
-						);
-
+						auto authIpc = std::make_shared<Common::Network::Session>(std::move(*m_ipcSocket), nullptr);
 						authIpc->m_checkValidSession = false;
-
-						m_ipcSessions[authIpc->getIpcId()] = authIpc;
 						authIpc->sendConnectionACK(Common::Enums::IPC_SERVER);
-						std::cout << "New IPC session accepted with ID: " << authIpc->getIpcId() << "\n";
 					}
 					else
 					{
-						Utils::Logger::log("Unauthorized connection attempt from IP: " + remoteEndpoint.address().to_string(),
-							Utils::LogType::Warning, "MainServer::asyncAcceptAuthServer");
+						Utils::Logger::log("Unauthorized connection attempt from IP: " + remoteEndpoint.address().to_string(), Utils::LogType::Warning,
+							"MainServer::asyncAcceptAuthServer");
 						m_ipcSocket->close();
 					}
 				}

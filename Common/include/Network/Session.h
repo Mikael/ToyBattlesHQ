@@ -49,7 +49,6 @@ namespace Common
 			Common::Cryptography::Crypt m_defaultCrypt{};
 			std::function<void(std::size_t)> m_onCloseSocketCallback{};
 			std::size_t m_id = 0;
-			std::size_t m_ipcId = 0;
 			std::uint32_t m_aid = 0;
 			std::string m_ip;
 			std::string m_gradedIp{ "" };
@@ -71,12 +70,11 @@ namespace Common
 
 			inline static std::size_t id_counter = 1;
 			inline static SessionIdManager sessionIdManager{ 500 };
-			inline static SessionIdManager ipcIdManager{ 500 };
 
 		public:
 			Session() = default;
 
-			explicit Session(tcp::socket&& socket, std::function<void(std::size_t)> fnct, bool isIpc = false)
+			explicit Session(tcp::socket&& socket, std::function<void(std::size_t)> fnct)
 				: m_socket{ std::move(socket) }
 				, m_onCloseSocketCallback{ fnct }
 			{
@@ -94,47 +92,22 @@ namespace Common
 					m_port = 0;
 				}
 
-
-				if (isIpc) 
+				auto newID = sessionIdManager.getNewSessionID();
+				if (newID.has_value())
 				{
-					auto newID = ipcIdManager.getNewSessionID();
-					if (newID.has_value()) 
-					{
-						m_ipcId = newID.value();
-						m_id = 0;  
-					}
-					else 
-					{
-						closeSocket();
-					}
+					m_id = newID.value();
 				}
-				else 
+				else
 				{
-					auto newID = sessionIdManager.getNewSessionID();
-					if (newID.has_value()) 
-					{
-						m_id = newID.value();
-						m_ipcId = 0; 
-					}
-					else 
-					{
-						closeSocket();
-					}
+					closeSocket();
 				}
 			}
+
 
 			virtual ~Session()
 			{
 				closeSocket();
-
-				if (m_ipcId != 0) 
-				{
-					ipcIdManager.releaseSessionID(m_ipcId);
-				}
-				else 
-				{
-					sessionIdManager.releaseSessionID(m_id);
-				}
+				sessionIdManager.releaseSessionID(m_id);
 			}
 
 			void setSessionId(std::size_t id)
@@ -212,7 +185,6 @@ namespace Common
 				callbacks<packetType, T>[idx] = std::move(fnct);
 			}
 
-			std::size_t getIpcId() const { return m_ipcId; } 
 			const std::string& getIp() const noexcept { return m_ip; }
 			void setGradedIp(const std::string& ip) { m_gradedIp = ip; }
 			void setIpFromGraded() { m_ip = m_gradedIp; }

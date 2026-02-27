@@ -3,7 +3,6 @@
 #define CAST_SERVER_H
 
 #include <cstdint>
-#include <unordered_map>
 #include <asio.hpp>
 #include <optional>
 #include "Classes/RoomsManager.h"
@@ -29,8 +28,6 @@ namespace Cast
 
 		tcp::acceptor m_mainServerAcceptor;
 		std::optional<tcp::socket> m_mainSocket;
-
-		std::unordered_map<std::size_t, std::shared_ptr<Common::Network::Session>> m_mainIpcSessions;
 
 		Ac::AntiCheatManager m_acManager;
 
