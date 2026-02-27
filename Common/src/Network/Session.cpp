@@ -149,6 +149,7 @@ namespace Common
 		{
 			if (!m_socket.is_open())
 			{
+				sessionIdManager.releaseSessionID(m_id);
 				return;
 			}
 
@@ -156,6 +157,8 @@ namespace Common
 			{
 				m_onCloseSocketCallback(m_id);
 			}
+
+			sessionIdManager.releaseSessionID(m_id);
 
 			asio::error_code errorCode;
 			auto endPoint = m_socket.remote_endpoint(errorCode);

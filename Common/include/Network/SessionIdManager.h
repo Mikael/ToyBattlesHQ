@@ -5,6 +5,7 @@
 #include <stack>
 #include <unordered_set>
 #include <optional>
+#include <iostream>
 
 class SessionIdManager
 {
@@ -33,6 +34,7 @@ public:
 		m_availableIDs.pop();
 		m_usedIDs.insert(newID);
 
+		std::cout << "Added new SessionID: " << newID << '\n';
 		return newID;
 	}
 
@@ -43,6 +45,7 @@ public:
 		{
 			m_usedIDs.erase(it);
 			m_availableIDs.push(id);
+			std::cout << "Removed sessionID: " << id << '\n';
 		}
 	}
 };
