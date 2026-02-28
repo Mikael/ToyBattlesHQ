@@ -64,8 +64,7 @@ namespace Main
 
 			Common::Protocol::TcpHeader header;
 			Common::Cryptography::Crypt cryptography;
-s
-s
+			
 			cryptography.KeySetup(0);
 			cryptography.RC5Decrypt32(reinterpret_cast<int32_t*>(m_reader.data()), &header, sizeof(Common::Protocol::TcpHeader));
 
