@@ -6,6 +6,7 @@
 #include "Network/Packet.h"
 #include "../DbPlayerInfo.h"
 #include <AuthService.h>
+#include <Utils/SetupParser.h>
 
 namespace Auth
 {
@@ -16,10 +17,53 @@ namespace Auth
             return (a < b) ? a : b;
         }
 
+        inline bool isServerReachable(std::uint32_t serverNumber, std::shared_ptr<Common::Network::Session> session)
+        {
+            const auto& mainServers = Common::Utils::SetupParser::getInstance().getMainServersInfo();
+            
+            bool serverConfigured = false;
+            for (const auto& server : mainServers)
+            {
+                if (server.serverNumber == serverNumber)
+                {
+                    serverConfigured = true;
+                    break;
+                }
+            }
+            
+            if (!serverConfigured)
+            {
+                return false;
+            }
+
+            auto playersPerServer = Auth::Utils::getPlayersPerServer(session->getAccountId(), session->getIp());
+            
+            return playersPerServer.find(serverNumber) != playersPerServer.end();
+        }
+
         inline void handleAuthUserInformation(const Common::Network::Packet& request, std::shared_ptr<Common::Network::Session> session, Auth::AuthService& authService)
         {
-            const std::string username = std::string(reinterpret_cast<const char*>(request.getData() + 48));
+            std::uint32_t serverId = 0;
+            if (request.getDataSize() >= 40)
+            {
+                serverId = *reinterpret_cast<const std::uint32_t*>(request.getData() + 36);
+            }
+            
+            if (serverId > 0)
+            {
+                if (!isServerReachable(serverId, session))
+                {
+                    Common::Network::Packet response;
+                    response.setTcpHeader(request.getSession(), Common::Enums::USER_LARGE_ENCRYPTION);
+                    response.setCommand(22, 0, 0, 0);
+                    response.setExtra(Auth::Enums::Login::TIME_EXPIRED);
+                    session->asyncWrite(response);
+                    return;
+                }
+            }
+            
             const std::string password = std::string(reinterpret_cast<const char*>(request.getData() + 4));
+            const std::string username = std::string(reinterpret_cast<const char*>(request.getData() + 48));
             
             auto result = authService.login(username, password, session->getIp(), session->getPort(), session->m_hwid, session);
 
