@@ -7,7 +7,7 @@
 #include "../DbPlayerInfo.h"
 #include <AuthService.h>
 #include <Utils/SetupParser.h>
-
+#include <AuthUtils.h>
 namespace Auth
 {
     namespace Handlers
